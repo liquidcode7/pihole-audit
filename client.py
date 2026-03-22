@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 from types import TracebackType
 from typing import Any
@@ -122,32 +123,41 @@ class PiholeClient:
         return resp.json()
 
     async def get_client_names(self) -> dict[str, str]:
-        """Fetch IP -> hostname mappings from Pi-hole's network device table.
+        """Build an IP -> label map by joining two Pi-hole endpoints.
 
-        Best-effort: returns an empty dict if the endpoint is unavailable or
-        returns unexpected data. Never raises.
+        /api/clients   — MAC -> comment (the human label you set in Pi-hole)
+        /api/network/devices — MAC -> [IPs]
+
+        Best-effort: returns {} on any error. Never raises.
         """
         try:
-            raw = await self.get("/api/network")
-            # v6 returns {"devices": [...]} where each device has "ip" and "name" fields
-            devices: list[Any] = (
-                raw.get("devices") or raw.get("network") or []
+            clients_raw, devices_raw = await asyncio.gather(
+                self.get("/api/clients"),
+                self.get("/api/network/devices"),
             )
-            names: dict[str, str] = {}
-            for device in devices:
-                if not isinstance(device, dict):
-                    continue
-                # A device may have multiple IPs; handle both single "ip" and list "ips"
-                ips: list[str] = []
-                if "ip" in device and device["ip"]:
-                    ips = [device["ip"]] if isinstance(device["ip"], str) else device["ip"]
-                elif "ips" in device:
-                    ips = device["ips"] if isinstance(device["ips"], list) else [device["ips"]]
-                name: str = device.get("name") or device.get("hostname") or ""
-                if name:
-                    for ip in ips:
+
+            # MAC (uppercase) -> label from the comment field
+            mac_to_label: dict[str, str] = {}
+            for c in clients_raw.get("clients", []):
+                mac = c.get("client", "").upper()
+                label = c.get("comment") or c.get("name") or ""
+                if mac and label:
+                    mac_to_label[mac] = label
+
+            if not mac_to_label:
+                return {}
+
+            # IP -> label via MAC join
+            ip_to_label: dict[str, str] = {}
+            for device in devices_raw.get("devices", []):
+                hwaddr = device.get("hwaddr", "").upper()
+                label = mac_to_label.get(hwaddr)
+                if label:
+                    for ip_entry in device.get("ips", []):
+                        ip = ip_entry.get("ip", "")
                         if ip:
-                            names[ip] = name
-            return names
+                            ip_to_label[ip] = label
+
+            return ip_to_label
         except Exception:
             return {}
