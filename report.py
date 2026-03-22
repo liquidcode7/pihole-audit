@@ -18,6 +18,7 @@ def render_html(
     traffic_data: TrafficData,
     bypass_data: BypassData,
     rec_data: RecommenderData,
+    client_names: dict[str, str] | None = None,
     output_path: Path | None = None,
 ) -> Path:
     """Render a self-contained HTML report and write it to disk.
@@ -34,12 +35,14 @@ def render_html(
     )
     template = env.get_template("report.html")
 
+    names = client_names or {}
+
     html = template.render(
         generated_at=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         traffic=traffic_data,
         bypass=bypass_data,
         rec=rec_data,
-        # Pre-compute a few conveniences for the template
+        client_names=names,
         bypass_doh=[f for f in bypass_data.findings if f.method == "doh_lookup"],
         bypass_ptr=[f for f in bypass_data.findings if f.method == "ptr_lookup"],
         bypass_low=[f for f in bypass_data.findings if f.method == "low_query_count"],

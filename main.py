@@ -113,7 +113,7 @@ async def _run() -> None:
             )
 
     # --- HTML Report ---
-    out = report.render_html(traffic_data, bypass_data, rec_data)
+    out = report.render_html(traffic_data, bypass_data, rec_data, client_names=client_names)
     console.print(f"\n[bold green]✓ Report saved:[/] {out}")
 
 

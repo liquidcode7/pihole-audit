@@ -1,3 +1,7 @@
+{%- macro client_label(ip) -%}
+  {%- set name = client_names.get(ip, "") -%}
+  {%- if name -%}{{ name }} <span style="color:var(--muted);font-size:.75rem">({{ ip }})</span>{%- else -%}{{ ip }}{%- endif -%}
+{%- endmacro -%}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -267,7 +271,7 @@
         {% for c in traffic.top_clients %}
         <tr>
           <td class="mono">{{ c.client }}</td>
-          <td>{{ c.name if c.name != c.client else "—" }}</td>
+          <td>{{ client_label(c.client) }}</td>
           <td class="num">{{ "{:,}".format(c.count) }}</td>
           <td class="num" style="color:var(--muted)">
             {{ "{:.1f}".format(c.count / traffic.summary.total * 100) }}%
@@ -307,7 +311,7 @@
         <tbody>
         {% for f in bypass_doh %}
         <tr>
-          <td class="mono">{{ f.client_ip }}</td>
+          <td class="mono">{{ client_label(f.client_ip) }}</td>
           <td><span class="badge badge-red">{{ f.detail }}</span></td>
           <td class="num">{{ f.count }}</td>
         </tr>
@@ -334,7 +338,7 @@
         <tbody>
         {% for f in bypass_ptr %}
         <tr>
-          <td class="mono">{{ f.client_ip }}</td>
+          <td class="mono">{{ client_label(f.client_ip) }}</td>
           <td>{{ f.detail }}</td>
           <td class="num">{{ f.count }}</td>
         </tr>
@@ -364,7 +368,7 @@
         <tbody>
         {% for f in bypass_low %}
         <tr>
-          <td class="mono">{{ f.client_ip }}</td>
+          <td class="mono">{{ client_label(f.client_ip) }}</td>
           <td class="num">{{ f.count }}</td>
           <td class="num" style="color:var(--yellow)">
             {% for s in bypass.client_stats if s.ip == f.client_ip %}
@@ -416,7 +420,9 @@
           <tr>
             <td class="mono">{{ r.domain }}</td>
             <td class="num">{{ "{:,}".format(r.count) }}</td>
-            <td style="color:var(--muted);font-size:.8rem">{{ r.clients[:5] | join(", ") }}</td>
+            <td style="color:var(--muted);font-size:.8rem">
+              {% for ip in r.clients[:5] %}{{ client_names.get(ip, ip) }}{% if not loop.last %}, {% endif %}{% endfor %}
+            </td>
           </tr>
           {% endfor %}
           </tbody>
