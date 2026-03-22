@@ -19,9 +19,10 @@ console = Console()
 async def _run() -> None:
     async with PiholeClient() as client:
         console.print("[bold cyan]pihole-audit[/] — fetching data…")
+        client_names = await client.get_client_names()
         traffic_data, bypass_data, rec_data = await asyncio.gather(
-            traffic.fetch(client),
-            bypass.fetch(client),
+            traffic.fetch(client, client_names=client_names),
+            bypass.fetch(client, client_names=client_names),
             recommender.fetch(client),
         )
 
@@ -89,7 +90,8 @@ async def _run() -> None:
     if flagged_clients:
         console.print(f"\n  [yellow]⚠ {len(flagged_clients)} client(s) have suspiciously low query counts:[/]")
         for s in flagged_clients:
-            console.print(f"    {s.ip}  →  {s.query_count} queries  ({s.pct_of_average:.0%} of avg)")
+            label = f"{s.ip} ({s.name})" if s.name != s.ip else s.ip
+            console.print(f"    {label}  →  {s.query_count} queries  ({s.pct_of_average:.0%} of avg)")
 
     # --- Blocklist Recommendations ---
     console.print(f"\n[bold]Blocklist Recommendations[/]  "

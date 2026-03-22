@@ -53,7 +53,11 @@ class TrafficData:
 # Public entry point
 # ---------------------------------------------------------------------------
 
-async def fetch(client: PiholeClient, top_n: int = 20) -> TrafficData:
+async def fetch(
+    client: PiholeClient,
+    top_n: int = 20,
+    client_names: dict[str, str] | None = None,
+) -> TrafficData:
     """Fetch all traffic data concurrently and return structured results."""
     summary_raw, top_domains_raw, top_blocked_raw, top_clients_raw = (
         await asyncio.gather(
@@ -68,7 +72,7 @@ async def fetch(client: PiholeClient, top_n: int = 20) -> TrafficData:
         summary=_parse_summary(summary_raw),
         top_allowed=_parse_top_domains(top_domains_raw, blocked=False)[:top_n],
         top_blocked=_parse_top_domains(top_blocked_raw, blocked=True)[:top_n],
-        top_clients=_parse_top_clients(top_clients_raw)[:top_n],
+        top_clients=_parse_top_clients(top_clients_raw, client_names or {})[:top_n],
     )
 
 
@@ -104,11 +108,15 @@ def _parse_top_domains(raw: dict[str, Any], *, blocked: bool) -> list[TopDomain]
     ]
 
 
-def _parse_top_clients(raw: dict[str, Any]) -> list[TopClient]:
+def _parse_top_clients(
+    raw: dict[str, Any],
+    client_names: dict[str, str],
+) -> list[TopClient]:
     # v6: {"clients": [{"ip": "...", "name": "...", "count": N}, ...]}
     clients = []
     for item in raw.get("clients", []):
         ip = item["ip"]
-        name = item.get("name") or ip
+        # Prefer enriched name from network table, then Pi-hole's own name, then IP
+        name = client_names.get(ip) or item.get("name") or ip
         clients.append(TopClient(client=ip, name=name, count=item["count"]))
     return clients

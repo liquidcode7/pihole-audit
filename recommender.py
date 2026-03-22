@@ -187,8 +187,8 @@ class RecommenderData:
 # Public entry point
 # ---------------------------------------------------------------------------
 
-async def fetch(client: PiholeClient, max_queries: int = 5_000) -> RecommenderData:
-    queries = await _fetch_allowed_queries(client, max_queries)
+async def fetch(client: PiholeClient, max_raw_queries: int = 15_000) -> RecommenderData:
+    queries = await _fetch_allowed_queries(client, max_raw_queries)
 
     # Count hits per domain and collect querying clients
     domain_counts: dict[str, int] = defaultdict(int)
@@ -235,13 +235,20 @@ async def fetch(client: PiholeClient, max_queries: int = 5_000) -> RecommenderDa
 # ---------------------------------------------------------------------------
 
 async def _fetch_allowed_queries(
-    client: PiholeClient, max_queries: int
+    client: PiholeClient, max_raw_queries: int
 ) -> list[dict[str, Any]]:
-    """Paginate /api/queries and keep only allowed (non-blocked) entries."""
+    """Paginate /api/queries and keep only allowed (non-blocked) entries.
+
+    Fetches up to max_raw_queries total queries from the log and returns the
+    subset that have an allowed status. Using raw query count as the limit
+    ensures we page through a representative window of the log rather than
+    stopping early when blocked queries dominate a page.
+    """
     collected: list[dict[str, Any]] = []
     cursor: int | None = None
+    raw_fetched = 0
 
-    while len(collected) < max_queries:
+    while raw_fetched < max_raw_queries:
         params: dict[str, Any] = {}
         if cursor is not None:
             params["cursor"] = cursor
@@ -251,6 +258,7 @@ async def _fetch_allowed_queries(
         if not batch:
             break
 
+        raw_fetched += len(batch)
         for q in batch:
             if q.get("status") in ALLOWED_STATUSES:
                 collected.append(q)
@@ -260,12 +268,7 @@ async def _fetch_allowed_queries(
             break
         cursor = oldest_id - 1
 
-        # Stop paginating once we've checked enough raw queries
-        # (collected is a subset so we need to track raw pages too)
-        if len(batch) < 50:  # last page
-            break
-
-    return collected[:max_queries]
+    return collected
 
 
 def _classify(domain: str, compiled: list[tuple[str, list[re.Pattern[str]]]]) -> str | None:

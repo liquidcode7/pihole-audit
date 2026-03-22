@@ -11,6 +11,7 @@ Two detection methods:
 from __future__ import annotations
 
 import asyncio
+import os
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any
@@ -56,6 +57,18 @@ _PTR_SUFFIXES: dict[str, str] = {
 # Fraction of network-average queries below which a client is flagged
 LOW_QUERY_THRESHOLD = 0.10
 
+# IPs never flagged for low query count (routers, gateways, localhost).
+# Extend via PIHOLE_BYPASS_IGNORE_IPS=192.168.1.1,10.0.0.1 in .env
+_DEFAULT_IGNORE_IPS: frozenset[str] = frozenset({"192.168.1.1", "127.0.0.1", "::1"})
+
+def _ignore_ips() -> frozenset[str]:
+    extra = {
+        ip.strip()
+        for ip in os.environ.get("PIHOLE_BYPASS_IGNORE_IPS", "").split(",")
+        if ip.strip()
+    }
+    return _DEFAULT_IGNORE_IPS | extra
+
 
 # ---------------------------------------------------------------------------
 # Data structures
@@ -72,8 +85,9 @@ class BypassFinding:
 @dataclass
 class ClientQueryStat:
     ip: str
+    name: str              # hostname if known, else same as ip
     query_count: int
-    pct_of_average: float   # 1.0 = exactly average
+    pct_of_average: float  # 1.0 = exactly average
     flagged: bool
 
 
@@ -92,6 +106,7 @@ async def fetch(
     client: PiholeClient,
     max_queries: int = 5_000,
     top_clients_n: int = 100,
+    client_names: dict[str, str] | None = None,
 ) -> BypassData:
     queries, clients_raw = await asyncio.gather(
         _fetch_queries(client, max_queries),
@@ -99,7 +114,7 @@ async def fetch(
     )
 
     findings = _detect_doh_and_ptr(queries)
-    client_stats = _detect_low_query_clients(clients_raw)
+    client_stats = _detect_low_query_clients(clients_raw, client_names or {})
 
     for stat in client_stats:
         if stat.flagged:
@@ -177,21 +192,27 @@ def _detect_doh_and_ptr(queries: list[dict[str, Any]]) -> list[BypassFinding]:
     return findings
 
 
-def _detect_low_query_clients(raw: dict[str, Any]) -> list[ClientQueryStat]:
+def _detect_low_query_clients(
+    raw: dict[str, Any],
+    client_names: dict[str, str],
+) -> list[ClientQueryStat]:
     items: list[dict[str, Any]] = raw.get("clients", [])
     if not items:
         return []
 
+    ignore = _ignore_ips()
     counts = [(item["ip"], item["count"]) for item in items]
     average = sum(c for _, c in counts) / len(counts)
 
     stats: list[ClientQueryStat] = []
     for ip, count in sorted(counts, key=lambda x: x[1], reverse=True):
         pct = count / average if average > 0 else 0.0
+        name = client_names.get(ip) or ip
         stats.append(ClientQueryStat(
             ip=ip,
+            name=name,
             query_count=count,
             pct_of_average=pct,
-            flagged=pct < LOW_QUERY_THRESHOLD,
+            flagged=(pct < LOW_QUERY_THRESHOLD and ip not in ignore),
         ))
     return stats

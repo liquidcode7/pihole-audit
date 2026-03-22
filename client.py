@@ -120,3 +120,34 @@ class PiholeClient:
         )
         resp.raise_for_status()
         return resp.json()
+
+    async def get_client_names(self) -> dict[str, str]:
+        """Fetch IP -> hostname mappings from Pi-hole's network device table.
+
+        Best-effort: returns an empty dict if the endpoint is unavailable or
+        returns unexpected data. Never raises.
+        """
+        try:
+            raw = await self.get("/api/network")
+            # v6 returns {"devices": [...]} where each device has "ip" and "name" fields
+            devices: list[Any] = (
+                raw.get("devices") or raw.get("network") or []
+            )
+            names: dict[str, str] = {}
+            for device in devices:
+                if not isinstance(device, dict):
+                    continue
+                # A device may have multiple IPs; handle both single "ip" and list "ips"
+                ips: list[str] = []
+                if "ip" in device and device["ip"]:
+                    ips = [device["ip"]] if isinstance(device["ip"], str) else device["ip"]
+                elif "ips" in device:
+                    ips = device["ips"] if isinstance(device["ips"], list) else [device["ips"]]
+                name: str = device.get("name") or device.get("hostname") or ""
+                if name:
+                    for ip in ips:
+                        if ip:
+                            names[ip] = name
+            return names
+        except Exception:
+            return {}
