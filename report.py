@@ -20,6 +20,7 @@ def render_html(
     rec_data: RecommenderData,
     client_names: dict[str, str] | None = None,
     output_path: Path | None = None,
+    assessment_text: str | None = None,
 ) -> Path:
     """Render a self-contained HTML report and write it to disk.
 
@@ -46,6 +47,7 @@ def render_html(
         bypass_doh=[f for f in bypass_data.findings if f.method == "doh_lookup"],
         bypass_ptr=[f for f in bypass_data.findings if f.method == "ptr_lookup"],
         bypass_low=[f for f in bypass_data.findings if f.method == "low_query_count"],
+        assessment_text=assessment_text,
     )
 
     output_path.write_text(html, encoding="utf-8")

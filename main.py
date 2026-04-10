@@ -5,8 +5,10 @@ from __future__ import annotations
 import asyncio
 
 from rich.console import Console
+from rich.panel import Panel
 from rich.table import Table
 
+import assessment
 import bypass
 import recommender
 import report
@@ -112,8 +114,25 @@ async def _run() -> None:
                 ],
             )
 
+    # --- AI Assessment ---
+    console.print("\n[bold magenta]AI Assessment[/]  [dim](streaming from Claude…)[/]\n")
+    console.rule(style="magenta")
+    assessment_text = assessment.get_ai_assessment(traffic_data, bypass_data, rec_data)
+    console.rule(style="magenta")
+    console.print(
+        Panel(
+            "[dim]Assessment complete. See above for full analysis.[/]",
+            border_style="magenta",
+            title="[bold magenta]Claude AI Assessment[/]",
+        )
+    )
+
     # --- HTML Report ---
-    out = report.render_html(traffic_data, bypass_data, rec_data, client_names=client_names)
+    out = report.render_html(
+        traffic_data, bypass_data, rec_data,
+        client_names=client_names,
+        assessment_text=assessment_text,
+    )
     console.print(f"\n[bold green]✓ Report saved:[/] {out}")
 
 

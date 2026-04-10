@@ -146,6 +146,37 @@
     font-size: .8rem;
     border-top: 1px solid var(--border);
   }
+
+  /* AI Assessment */
+  .ai-card {
+    background: var(--surface);
+    border: 1px solid #7c3aed55;
+    border-left: 3px solid #a855f7;
+    border-radius: 8px;
+    padding: 1.5rem;
+  }
+  .ai-card h2 { color: #a855f7; }
+  .ai-label {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    font-size: .75rem;
+    font-weight: 600;
+    color: #a855f7;
+    background: rgba(168,85,247,.12);
+    border: 1px solid rgba(168,85,247,.25);
+    border-radius: 99px;
+    padding: .2rem .65rem;
+    margin-bottom: 1.25rem;
+  }
+  .ai-body {
+    white-space: pre-wrap;
+    font-size: .88rem;
+    line-height: 1.75;
+    color: var(--text);
+  }
+  .ai-body strong { color: var(--accent); }
+  .ai-skipped { color: var(--muted); font-style: italic; }
 </style>
 </head>
 <body>
@@ -167,6 +198,7 @@
   <a href="#traffic">Traffic Review</a>
   <a href="#bypass">DNS Bypass</a>
   <a href="#recommendations">Blocklist Recs</a>
+  <a href="#ai-assessment">AI Assessment</a>
 </nav>
 
 <main>
@@ -433,6 +465,19 @@
   {% endfor %}
 
   {% endif %}
+</section>
+
+<!-- ═══════════════════════════════════════════════ AI ASSESSMENT -->
+<section id="ai-assessment">
+  <div class="ai-card">
+    <h2>AI Assessment</h2>
+    <div class="ai-label">&#x2728; claude-sonnet-4-6</div>
+    {% if assessment_text %}
+    <div class="ai-body">{{ assessment_text }}</div>
+    {% else %}
+    <p class="ai-skipped">AI assessment was not run — set ANTHROPIC_API_KEY in .env to enable.</p>
+    {% endif %}
+  </div>
 </section>
 
 </main>
