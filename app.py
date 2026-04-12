@@ -1,12 +1,13 @@
 """LiquidSystem — FastAPI web application.
 
 Exposes:
-  POST /api/run            — trigger a new analysis (runs in background)
-  GET  /api/run/status     — poll run progress
-  GET  /api/reports        — list all saved reports (metadata only)
-  GET  /api/reports/latest — full JSON for the most recent report
-  GET  /api/reports/{id}   — full JSON for a specific report
-  GET  /                   — serves the dashboard SPA
+  POST /api/run              — trigger a new analysis (runs in background)
+  GET  /api/run/status       — poll run progress
+  GET  /api/reports          — list all saved reports (metadata only)
+  GET  /api/reports/latest   — full JSON for the most recent report
+  GET  /api/reports/{id}     — full JSON for a specific report
+  POST /api/logs/clear       — clear fail2ban logs from selected containers
+  GET  /                     — serves the dashboard SPA
 """
 
 from __future__ import annotations
@@ -22,24 +23,27 @@ from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
+import log_cleaner
+from fail2ban import CONTAINERS
 from runner import run_analysis
 
 load_dotenv()
 
 # ---------------------------------------------------------------------------
-# Config (overridable via environment variables)
+# Config
 # ---------------------------------------------------------------------------
 
-DATA_DIR = Path(os.environ.get("REPORTS_DIR", "data/reports"))
+DATA_DIR    = Path(os.environ.get("REPORTS_DIR", "data/reports"))
 MAX_REPORTS = int(os.environ.get("MAX_REPORTS", "30"))
-# Hour (0–23 UTC) at which the daily automated run fires.
-SCHEDULE_HOUR = int(os.environ.get("SCHEDULE_HOUR", "11"))  # 11:00 UTC = 6:00 AM Indianapolis
+# 11:00 UTC = 6:00 AM Indianapolis (EST = UTC-5)
+SCHEDULE_HOUR = int(os.environ.get("SCHEDULE_HOUR", "11"))
 
 _STATIC_DIR = Path(__file__).parent / "static"
 
 # ---------------------------------------------------------------------------
-# In-memory run status — resets on server restart, intentionally ephemeral.
+# In-memory run status
 # ---------------------------------------------------------------------------
 
 _run_status: dict = {
@@ -55,7 +59,6 @@ _run_status: dict = {
 
 
 async def _execute_run() -> None:
-    """Run the full analysis pipeline. Caller must set running=True first."""
     try:
         report = await run_analysis()
         _save_report(report)
@@ -74,7 +77,6 @@ def _save_report(report: dict) -> None:
 
 
 def _prune_old_reports() -> None:
-    """Delete oldest reports when count exceeds MAX_REPORTS."""
     reports = sorted(DATA_DIR.glob("*.json"), key=lambda p: p.name)
     while len(reports) > MAX_REPORTS:
         reports[0].unlink()
@@ -116,17 +118,14 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="LiquidSystem", lifespan=lifespan)
 
 # ---------------------------------------------------------------------------
-# Routes — order matters: literal paths must come before parameterized ones.
+# Routes
 # ---------------------------------------------------------------------------
 
 
 @app.post("/api/run")
 async def api_run(background_tasks: BackgroundTasks) -> JSONResponse:
-    """Trigger a new analysis run. Returns 409 if one is already in progress."""
     if _run_status["running"]:
         return JSONResponse({"status": "already_running"}, status_code=409)
-    # Set running immediately (before background task starts) to prevent
-    # a second concurrent request from also starting a run.
     _run_status.update({
         "running": True,
         "started_at": datetime.now().isoformat(),
@@ -143,7 +142,6 @@ async def api_run_status() -> dict:
 
 @app.get("/api/reports")
 async def api_reports() -> list:
-    """Return a list of {id, created_at} metadata for all saved reports, newest first."""
     reports = []
     for path in sorted(DATA_DIR.glob("*.json"), key=lambda p: p.name, reverse=True):
         try:
@@ -159,7 +157,6 @@ async def api_reports() -> list:
 
 @app.get("/api/reports/latest")
 async def api_reports_latest() -> JSONResponse:
-    """Return the full JSON for the most recently saved report."""
     paths = sorted(DATA_DIR.glob("*.json"), key=lambda p: p.name, reverse=True)
     if not paths:
         raise HTTPException(status_code=404, detail="No reports yet")
@@ -171,8 +168,6 @@ async def api_reports_latest() -> JSONResponse:
 
 @app.get("/api/reports/{report_id}")
 async def api_report(report_id: str) -> JSONResponse:
-    """Return the full JSON for a specific report by ID."""
-    # Sanitize: only allow alphanumeric + hyphens + underscores
     if not all(c.isalnum() or c in "-_" for c in report_id):
         raise HTTPException(status_code=400, detail="Invalid report ID")
     path = DATA_DIR / f"{report_id}.json"
@@ -184,7 +179,49 @@ async def api_report(report_id: str) -> JSONResponse:
         raise HTTPException(status_code=500, detail=str(exc))
 
 
-# Serve static assets (CSS, JS, favicon if added later)
+# ---------------------------------------------------------------------------
+# Log clear endpoint
+# ---------------------------------------------------------------------------
+
+class ClearRequest(BaseModel):
+    container_ids: list[str]
+
+
+@app.post("/api/logs/clear")
+async def api_logs_clear(req: ClearRequest) -> JSONResponse:
+    """Clear fail2ban logs and active bans from selected containers / Proxmox host."""
+    # Build label map from known containers
+    labels: dict[str, str] = {ct_id: label for ct_id, (_, label) in CONTAINERS.items()}
+    labels["host"] = "proxmox"
+
+    # Validate: only allow known container IDs and "host"
+    valid_ids = set(CONTAINERS.keys()) | {"host"}
+    unknown = [cid for cid in req.container_ids if cid not in valid_ids]
+    if unknown:
+        raise HTTPException(status_code=400, detail=f"Unknown container IDs: {unknown}")
+
+    report = await log_cleaner.clear_containers(req.container_ids, labels)
+
+    return JSONResponse({
+        "results": [
+            {
+                "ct_id":           r.ct_id,
+                "label":           r.label,
+                "success":         r.success,
+                "log_bytes_freed": r.log_bytes_freed,
+                "error":           r.error,
+            }
+            for r in report.results
+        ],
+        "total_bytes_freed": report.total_bytes_freed,
+        "errors": report.errors,
+    })
+
+
+# ---------------------------------------------------------------------------
+# Static files and root
+# ---------------------------------------------------------------------------
+
 app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
 

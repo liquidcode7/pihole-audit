@@ -69,10 +69,7 @@
       color: var(--text);
     }
     .header-left h1 span { color: var(--accent); }
-    .header-sub {
-      font-size: 0.75rem;
-      color: var(--muted);
-    }
+    .header-sub { font-size: 0.75rem; color: var(--muted); }
     .header-right {
       display: flex;
       align-items: center;
@@ -103,8 +100,12 @@
       transition: opacity 0.15s, background 0.15s;
     }
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    .btn-primary { background: var(--accent); color: #0d1117; }
-    .btn-primary:hover:not(:disabled) { background: #79b8ff; }
+    .btn-primary   { background: var(--accent);  color: #0d1117; }
+    .btn-primary:hover:not(:disabled)   { background: #79b8ff; }
+    .btn-secondary { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover:not(:disabled) { background: var(--border); }
+    .btn-danger    { background: rgba(248,81,73,0.15); color: var(--danger); border: 1px solid rgba(248,81,73,0.4); }
+    .btn-danger:hover:not(:disabled)    { background: rgba(248,81,73,0.25); }
 
     /* ── Status Banner ── */
     #status-banner {
@@ -128,8 +129,34 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* ── Tab Bar ── */
+    .tab-bar {
+      display: flex;
+      gap: 2px;
+      padding: 0 20px;
+      background: var(--header-bg);
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+    }
+    .tab-btn {
+      padding: 10px 16px;
+      font-size: 0.82rem;
+      font-weight: 500;
+      color: var(--muted);
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .tab-btn:hover   { color: var(--text); }
+    .tab-btn.active  { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab-pane        { display: none; }
+    .tab-pane.active { display: block; }
+
     /* ── Main Layout ── */
-    main { max-width: 1280px; margin: 0 auto; padding: 24px 20px; }
+    main { max-width: 1360px; margin: 0 auto; padding: 24px 20px; }
 
     /* ── Empty State ── */
     .empty-state {
@@ -190,6 +217,13 @@
       letter-spacing: 0.05em;
     }
     .section h3:first-of-type { margin-top: 0; }
+    .section-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .section-actions h2 { margin-bottom: 0; }
 
     /* ── Stat Cards ── */
     .stat-grid {
@@ -218,11 +252,7 @@
       color: var(--text);
       line-height: 1.2;
     }
-    .stat-sub {
-      font-size: 0.75rem;
-      color: var(--muted);
-      margin-top: 2px;
-    }
+    .stat-sub { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
     .stat-card.blocked .stat-value { color: var(--danger); }
     .stat-card.allowed .stat-value { color: var(--success); }
 
@@ -252,7 +282,7 @@
       color: var(--muted);
       border-bottom: 1px solid var(--border);
     }
-    .data-table tbody tr { border-bottom: 1px solid var(--border); }
+    .data-table tbody tr  { border-bottom: 1px solid var(--border); }
     .data-table tbody tr:last-child { border-bottom: none; }
     .data-table tbody tr:hover { background: var(--surface-2); }
     .data-table td {
@@ -260,8 +290,8 @@
       color: var(--text);
       vertical-align: middle;
     }
-    .data-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
-    .data-table td.mono { font-family: "SF Mono", "Fira Code", monospace; font-size: 0.78rem; }
+    .data-table td.num  { text-align: right; font-variant-numeric: tabular-nums; }
+    .data-table td.mono { font-family: "SF Mono","Fira Code",monospace; font-size: 0.78rem; }
     .data-table td.muted { color: var(--muted); }
     .rank { color: var(--dim); font-size: 0.75rem; width: 24px; }
 
@@ -282,6 +312,13 @@
     .badge-doh     { background: rgba(248,81,73,0.15);   color: var(--danger);       border: 1px solid rgba(248,81,73,0.3);   }
     .badge-ptr     { background: rgba(210,153,34,0.15);  color: var(--warning);      border: 1px solid rgba(210,153,34,0.3);  }
     .badge-low-q   { background: rgba(210,153,34,0.12);  color: var(--warning);      border: 1px solid rgba(210,153,34,0.25); }
+    .badge-up      { background: rgba(63,185,80,0.1);    color: var(--success);      border: 1px solid rgba(63,185,80,0.3);   }
+    .badge-down    { background: rgba(248,81,73,0.1);    color: var(--danger);       border: 1px solid rgba(248,81,73,0.3);   }
+    .badge-block   { background: rgba(248,81,73,0.12);   color: var(--danger);       border: 1px solid rgba(248,81,73,0.25);  }
+    .badge-pass    { background: rgba(63,185,80,0.10);   color: var(--success);      border: 1px solid rgba(63,185,80,0.2);   }
+    .badge-sev-1   { background: rgba(248,81,73,0.2);    color: var(--danger);       border: 1px solid rgba(248,81,73,0.4);   }
+    .badge-sev-2   { background: rgba(210,153,34,0.15);  color: var(--warning);      border: 1px solid rgba(210,153,34,0.3);  }
+    .badge-sev-3   { background: rgba(88,166,255,0.1);   color: var(--muted);        border: 1px solid rgba(88,166,255,0.2);  }
 
     /* ── Alert boxes ── */
     .alert {
@@ -294,14 +331,10 @@
     .alert-success { background: rgba(63,185,80,0.08);  border-color: rgba(63,185,80,0.25);  color: var(--success); }
     .alert-warning { background: rgba(210,153,34,0.08); border-color: rgba(210,153,34,0.25); color: var(--warning); }
     .alert-danger  { background: rgba(248,81,73,0.08);  border-color: rgba(248,81,73,0.25);  color: var(--danger); }
+    .alert-info    { background: rgba(88,166,255,0.06); border-color: rgba(88,166,255,0.2);  color: var(--muted); }
 
     /* ── Category sub-sections ── */
-    .category-block {
-      margin-bottom: 16px;
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      overflow: hidden;
-    }
+    .category-block { margin-bottom: 16px; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
     .category-header {
       background: var(--surface-2);
       padding: 8px 12px;
@@ -312,52 +345,30 @@
       align-items: center;
       gap: 8px;
     }
-    .category-header .cat-count {
-      color: var(--muted);
-      font-weight: 400;
-    }
+    .category-header .cat-count { color: var(--muted); font-weight: 400; }
 
     /* ── AI Assessment ── */
-    .assessment-body {
-      font-size: 0.87rem;
-      line-height: 1.75;
-      color: var(--text);
-    }
+    .assessment-body { font-size: 0.87rem; line-height: 1.75; color: var(--text); }
     .assessment-body h1,
     .assessment-body h2 {
-      font-size: 1rem;
-      font-weight: 700;
-      color: var(--text);
-      margin: 20px 0 8px;
-      padding-bottom: 6px;
-      border-bottom: 1px solid var(--border);
+      font-size: 1rem; font-weight: 700; color: var(--text);
+      margin: 20px 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border);
     }
     .assessment-body h3 {
-      font-size: 0.9rem;
-      font-weight: 600;
-      color: var(--text);
-      margin: 14px 0 6px;
-      text-transform: none;
-      letter-spacing: 0;
+      font-size: 0.9rem; font-weight: 600; color: var(--text);
+      margin: 14px 0 6px; text-transform: none; letter-spacing: 0;
     }
     .assessment-body h4 {
-      font-size: 0.85rem;
-      font-weight: 600;
-      color: var(--muted);
-      margin: 10px 0 4px;
-      text-transform: none;
+      font-size: 0.85rem; font-weight: 600; color: var(--muted);
+      margin: 10px 0 4px; text-transform: none;
     }
     .assessment-body p  { margin-bottom: 10px; }
     .assessment-body ul,
     .assessment-body ol { margin: 8px 0 10px 20px; }
     .assessment-body li { margin-bottom: 4px; }
     .assessment-body strong { color: var(--text); font-weight: 600; }
-    .assessment-body em { color: var(--muted); font-style: italic; }
-    .assessment-body code {
-      font-size: 0.8em;
-      background: var(--surface-2);
-      border: 1px solid var(--border);
-    }
+    .assessment-body em    { color: var(--muted); font-style: italic; }
+    .assessment-body code  { font-size: 0.8em; }
 
     /* ── Device grid ── */
     .risk-summary-grid {
@@ -380,10 +391,191 @@
     .risk-tile.risk-low .risk-count     { color: var(--risk-low); }
     .risk-tile.risk-minimal .risk-count { color: var(--risk-minimal); }
 
+    /* ── Host Grid (Network Health) ── */
+    .host-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 14px;
+    }
+    .host-card {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 14px 16px;
+    }
+    .host-card.host-down { border-color: rgba(248,81,73,0.3); }
+    .host-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .host-name {
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: var(--text);
+      flex: 1;
+    }
+    .host-ip {
+      font-family: "SF Mono","Fira Code",monospace;
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .status-dot.up   { background: var(--success); box-shadow: 0 0 4px var(--success); }
+    .status-dot.down { background: var(--danger);  box-shadow: 0 0 4px var(--danger); }
+    .metric-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .metric-label {
+      font-size: 0.68rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      width: 32px;
+      flex-shrink: 0;
+    }
+    .metric-bar {
+      flex: 1;
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .metric-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.4s ease;
+    }
+    .metric-fill.cpu  { background: var(--accent); }
+    .metric-fill.ram  { background: var(--success); }
+    .metric-fill.disk { background: var(--warning); }
+    .metric-fill.high { background: var(--danger); }
+    .metric-val {
+      font-size: 0.72rem;
+      font-variant-numeric: tabular-nums;
+      color: var(--text);
+      width: 42px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+    .net-row {
+      display: flex;
+      gap: 12px;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--border);
+    }
+    .net-item { font-size: 0.72rem; color: var(--muted); }
+    .net-item span { color: var(--text); font-weight: 600; }
+    .host-unavailable {
+      text-align: center;
+      padding: 12px;
+      color: var(--dim);
+      font-size: 0.78rem;
+    }
+
+    /* ── Security event tabs ── */
+    .sub-tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+    .sub-tab {
+      padding: 7px 14px;
+      font-size: 0.78rem;
+      font-weight: 500;
+      color: var(--muted);
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+      transition: color 0.15s;
+    }
+    .sub-tab:hover  { color: var(--text); }
+    .sub-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .sub-pane       { display: none; }
+    .sub-pane.active { display: block; }
+
+    /* ── Container status ── */
+    .ct-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .ct-card {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+    }
+    .ct-card.has-bans { border-color: rgba(210,153,34,0.3); }
+    .ct-header { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+    .ct-id { font-size: 0.68rem; color: var(--dim); font-family: monospace; }
+    .ct-name { font-size: 0.85rem; font-weight: 600; flex: 1; }
+    .ct-ip { font-size: 0.72rem; color: var(--muted); font-family: monospace; }
+    .ct-stat { font-size: 0.75rem; color: var(--muted); }
+    .ct-stat .val { color: var(--text); font-weight: 600; }
+    .ct-stat .val.banned { color: var(--warning); }
+    .ct-error { font-size: 0.72rem; color: var(--danger); margin-top: 4px; }
+    .ct-ips { font-size: 0.7rem; color: var(--muted); margin-top: 6px; font-family: monospace; word-break: break-all; }
+
+    /* ── Modal ── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      width: 100%;
+      max-width: 480px;
+      z-index: 201;
+      position: relative;
+    }
+    .modal-box h3 { font-size: 1rem; font-weight: 700; margin-bottom: 8px; }
+    .modal-box p  { font-size: 0.83rem; color: var(--muted); margin-bottom: 16px; }
+    .modal-checklist { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+    .modal-check {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-size: 0.82rem;
+    }
+    .modal-check input[type="checkbox"] { cursor: pointer; }
+    .modal-check-info { flex: 1; }
+    .modal-check-label { font-weight: 600; color: var(--text); }
+    .modal-check-sub   { font-size: 0.72rem; color: var(--muted); font-family: monospace; }
+    .modal-check-size  { font-size: 0.72rem; color: var(--muted); }
+    .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+    .modal-result  { margin-top: 16px; }
+
     /* ── Utility ── */
     .hidden { display: none !important; }
-    .text-muted { color: var(--muted); }
-    .text-danger { color: var(--danger); }
+    .text-muted   { color: var(--muted); }
+    .text-danger  { color: var(--danger); }
     .text-success { color: var(--success); }
     .text-warning { color: var(--warning); }
     .mt-0 { margin-top: 0; }
@@ -401,17 +593,14 @@
     /* ── Responsive ── */
     @media (max-width: 768px) {
       header { padding: 0 12px; }
-      .header-left h1 { font-size: 1rem; }
       .header-sub { display: none; }
       #report-select { max-width: 130px; font-size: 0.75rem; }
       main { padding: 14px 12px; }
       .stat-grid { grid-template-columns: repeat(2, 1fr); }
       .table-pair { grid-template-columns: 1fr; }
       .risk-summary-grid { grid-template-columns: repeat(2, 1fr); }
-    }
-    @media (max-width: 480px) {
-      .stat-grid { grid-template-columns: 1fr 1fr; }
-      .stat-value { font-size: 1.3rem; }
+      .host-grid { grid-template-columns: 1fr; }
+      .ct-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -420,26 +609,33 @@
 <header>
   <div class="header-left">
     <h1>Liquid<span>System</span></h1>
-    <span class="header-sub">LiquidLab Pi-hole Audit</span>
+    <span class="header-sub">LiquidLab Network Intelligence</span>
   </div>
   <div class="header-right">
-    <select id="report-select" title="View a past report">
+    <select id="report-select" title="View a past report" onchange="onReportSelect()">
       <option value="">History…</option>
     </select>
-    <button id="run-btn" class="btn btn-primary" onclick="runNow()">
-      ▶ Run Now
-    </button>
+    <button id="run-btn" class="btn btn-primary" onclick="runNow()">&#9654; Run Now</button>
   </div>
 </header>
 
 <div id="status-banner" class="hidden"></div>
 
+<!-- Tab Bar -->
+<nav class="tab-bar" id="tab-bar" style="display:none">
+  <button class="tab-btn active" data-tab="pihole"     onclick="switchTab('pihole')">Pi-hole</button>
+  <button class="tab-btn"        data-tab="health"     onclick="switchTab('health')">Network Health</button>
+  <button class="tab-btn"        data-tab="security"   onclick="switchTab('security')">Security Events</button>
+  <button class="tab-btn"        data-tab="containers" onclick="switchTab('containers')">Containers</button>
+  <button class="tab-btn"        data-tab="assessment" onclick="switchTab('assessment')">AI Assessment</button>
+</nav>
+
 <main>
-  <!-- Empty state (no reports yet) -->
+  <!-- Empty state -->
   <div id="empty-state" class="empty-state hidden">
     <h2>No reports yet</h2>
-    <p>Click <strong>Run Now</strong> to kick off your first Pi-hole audit.</p>
-    <button class="btn btn-primary" onclick="runNow()">▶ Run First Analysis</button>
+    <p>Click <strong>Run Now</strong> to kick off the first analysis.</p>
+    <button class="btn btn-primary" onclick="runNow()">&#9654; Run First Analysis</button>
   </div>
 
   <!-- Report view -->
@@ -449,64 +645,135 @@
       <span id="report-ts-label"></span>
     </div>
 
-    <!-- Traffic Summary -->
-    <div class="section" id="sec-traffic">
-      <h2>Traffic Summary</h2>
-      <div class="stat-grid" id="stat-cards"></div>
+    <!-- ═══════════════ TAB: Pi-hole ═══════════════ -->
+    <div id="tab-pihole" class="tab-pane active">
 
-      <div class="table-pair">
-        <div class="table-col">
-          <h3>Top Allowed Domains</h3>
-          <div class="table-wrap" id="tbl-allowed"></div>
+      <div class="section" id="sec-traffic">
+        <h2>Traffic Summary</h2>
+        <div class="stat-grid" id="stat-cards"></div>
+        <div class="table-pair">
+          <div class="table-col">
+            <h3>Top Allowed Domains</h3>
+            <div class="table-wrap" id="tbl-allowed"></div>
+          </div>
+          <div class="table-col">
+            <h3>Top Blocked Domains</h3>
+            <div class="table-wrap" id="tbl-blocked"></div>
+          </div>
         </div>
-        <div class="table-col">
-          <h3>Top Blocked Domains</h3>
-          <div class="table-wrap" id="tbl-blocked"></div>
-        </div>
+        <h3>Top Clients</h3>
+        <div class="table-wrap" id="tbl-clients"></div>
       </div>
 
-      <h3>Top Clients</h3>
-      <div class="table-wrap" id="tbl-clients"></div>
+      <div class="section" id="sec-bypass">
+        <h2>DNS Bypass Detection <span class="section-count" id="bypass-count"></span></h2>
+        <div id="bypass-content"></div>
+      </div>
+
+      <div class="section" id="sec-rec">
+        <h2>Blocklist Recommendations <span class="section-count" id="rec-count"></span></h2>
+        <div id="rec-content"></div>
+      </div>
+
+      <div class="section" id="sec-devices">
+        <h2>Device Inventory <span class="section-count" id="device-count"></span></h2>
+        <div class="risk-summary-grid" id="risk-tiles"></div>
+        <div class="table-wrap" id="tbl-devices"></div>
+      </div>
+
+    </div><!-- /tab-pihole -->
+
+    <!-- ═══════════════ TAB: Network Health ═══════════════ -->
+    <div id="tab-health" class="tab-pane">
+      <div class="section">
+        <h2>Network Health <span class="section-count" id="health-count"></span></h2>
+        <div id="health-content">
+          <div class="alert alert-info">No Prometheus data in this report.</div>
+        </div>
+      </div>
     </div>
 
-    <!-- DNS Bypass -->
-    <div class="section" id="sec-bypass">
-      <h2>DNS Bypass Detection <span class="section-count" id="bypass-count"></span></h2>
-      <div id="bypass-content"></div>
+    <!-- ═══════════════ TAB: Security Events ═══════════════ -->
+    <div id="tab-security" class="tab-pane">
+      <div class="section">
+        <div class="sub-tabs">
+          <button class="sub-tab active" data-sub="suricata"  onclick="switchSub('suricata')">Suricata IDS <span id="sub-suricata-count"></span></button>
+          <button class="sub-tab"        data-sub="fw-blocks" onclick="switchSub('fw-blocks')">Firewall Blocks <span id="sub-blocks-count"></span></button>
+          <button class="sub-tab"        data-sub="ban-summary" onclick="switchSub('ban-summary')">Fail2ban Summary <span id="sub-bans-count"></span></button>
+        </div>
+
+        <div id="sub-suricata" class="sub-pane active">
+          <div id="suricata-content">
+            <div class="alert alert-info">No IDS data in this report.</div>
+          </div>
+        </div>
+
+        <div id="sub-fw-blocks" class="sub-pane">
+          <div id="fw-blocks-content">
+            <div class="alert alert-info">No firewall log data in this report.</div>
+          </div>
+        </div>
+
+        <div id="sub-ban-summary" class="sub-pane">
+          <div id="ban-summary-content">
+            <div class="alert alert-info">No fail2ban data in this report.</div>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <!-- Blocklist Recommendations -->
-    <div class="section" id="sec-rec">
-      <h2>Blocklist Recommendations <span class="section-count" id="rec-count"></span></h2>
-      <div id="rec-content"></div>
+    <!-- ═══════════════ TAB: Containers ═══════════════ -->
+    <div id="tab-containers" class="tab-pane">
+      <div class="section">
+        <div class="section-actions">
+          <h2>Container Status <span class="section-count" id="ct-count"></span></h2>
+          <button class="btn btn-danger" onclick="openClearModal()" id="clear-logs-btn">Clear Logs…</button>
+        </div>
+        <div id="ct-content">
+          <div class="alert alert-info">No container data in this report.</div>
+        </div>
+      </div>
     </div>
 
-    <!-- Device Inventory -->
-    <div class="section" id="sec-devices">
-      <h2>Device Inventory <span class="section-count" id="device-count"></span></h2>
-      <div class="risk-summary-grid" id="risk-tiles"></div>
-      <div class="table-wrap" id="tbl-devices"></div>
+    <!-- ═══════════════ TAB: AI Assessment ═══════════════ -->
+    <div id="tab-assessment" class="tab-pane">
+      <div class="section">
+        <h2>AI Assessment</h2>
+        <div class="assessment-body" id="assessment-content"></div>
+      </div>
     </div>
 
-    <!-- AI Assessment -->
-    <div class="section" id="sec-assessment">
-      <h2>AI Assessment</h2>
-      <div class="assessment-body" id="assessment-content"></div>
-    </div>
-  </div>
+  </div><!-- /report-view -->
 </main>
 
 <footer id="page-footer" class="hidden">
-  LiquidSystem · <span id="footer-ts"></span>
+  LiquidSystem &middot; <span id="footer-ts"></span>
 </footer>
+
+<!-- ══ Clear Logs Modal ══ -->
+<div id="clear-modal" class="modal-overlay hidden" onclick="onModalOverlayClick(event)">
+  <div class="modal-box">
+    <h3>Clear Container Logs</h3>
+    <p>Select containers to clear fail2ban active bans and truncate log files. This cannot be undone.</p>
+    <div class="modal-checklist" id="clear-checklist"></div>
+    <div id="modal-result" class="modal-result hidden"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeClearModal()">Cancel</button>
+      <button class="btn btn-danger" id="clear-exec-btn" onclick="executeClearLogs()">Clear Selected</button>
+    </div>
+  </div>
+</div>
 
 <script>
 'use strict';
 
 // ── State ──────────────────────────────────────────────────────────────────
-let pollTimer = null;
-let lastCompleted = null;
+let pollTimer      = null;
+let lastCompleted  = null;
 let currentReportId = null;
+let currentReport   = null;
+let activeTab       = 'pihole';
+let activeSub       = 'suricata';
 
 // ── Init ───────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
@@ -515,18 +782,38 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadLatest();
 });
 
+// ── Tab switching ──────────────────────────────────────────────────────────
+function switchTab(name) {
+  activeTab = name;
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === name);
+  });
+  document.querySelectorAll('.tab-pane').forEach(pane => {
+    pane.classList.toggle('active', pane.id === `tab-${name}`);
+  });
+}
+
+function switchSub(name) {
+  activeSub = name;
+  document.querySelectorAll('.sub-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.sub === name);
+  });
+  document.querySelectorAll('.sub-pane').forEach(pane => {
+    pane.classList.toggle('active', pane.id === `sub-${name}`);
+  });
+}
+
 // ── Run Control ────────────────────────────────────────────────────────────
 async function runNow() {
   const btn = document.getElementById('run-btn');
   btn.disabled = true;
-
   try {
     const resp = await fetch('/api/run', { method: 'POST' });
     const data = await resp.json();
     if (resp.status === 409 || data.status === 'already_running') {
       showBanner('running', 'Analysis already in progress…');
     } else {
-      showBanner('running', 'Analysis started — this takes 10–15 seconds…');
+      showBanner('running', 'Analysis started — pulling all data sources…');
     }
     startPolling();
   } catch (err) {
@@ -583,26 +870,23 @@ function stopPolling() {
 function showBanner(type, msg) {
   const el = document.getElementById('status-banner');
   el.className = `status-bar ${type}`;
-  el.innerHTML = type === 'running'
-    ? `<div class="spinner"></div>${msg}`
-    : msg;
+  el.innerHTML = type === 'running' ? `<div class="spinner"></div>${msg}` : msg;
   el.classList.remove('hidden');
 }
-
 function hideBanner() {
   document.getElementById('status-banner').classList.add('hidden');
 }
 
-// ── Report History ─────────────────────────────────────────────────────────
+// ── History ────────────────────────────────────────────────────────────────
 async function loadHistory() {
   try {
-    const resp = await fetch('/api/reports');
+    const resp    = await fetch('/api/reports');
     const reports = await resp.json();
-    const sel = document.getElementById('report-select');
+    const sel     = document.getElementById('report-select');
     sel.innerHTML = '<option value="">History…</option>';
     for (const r of reports) {
       const opt = document.createElement('option');
-      opt.value = r.id;
+      opt.value       = r.id;
       opt.textContent = fmtTimestamp(r.created_at);
       if (r.id === currentReportId) opt.selected = true;
       sel.appendChild(opt);
@@ -619,73 +903,80 @@ function onReportSelect() {
 async function loadLatest() {
   try {
     const resp = await fetch('/api/reports/latest');
-    if (resp.status === 404) {
-      showEmptyState();
-      return;
-    }
-    const data = await resp.json();
-    renderReport(data);
-  } catch (_) {
-    showEmptyState();
-  }
+    if (resp.status === 404) { showEmptyState(); return; }
+    renderReport(await resp.json());
+  } catch (_) { showEmptyState(); }
 }
 
 async function loadReport(id) {
   try {
     const resp = await fetch(`/api/reports/${encodeURIComponent(id)}`);
     if (!resp.ok) return;
-    const data = await resp.json();
-    renderReport(data);
+    renderReport(await resp.json());
   } catch (_) {}
 }
 
-// ── State Helpers ──────────────────────────────────────────────────────────
+// ── State helpers ──────────────────────────────────────────────────────────
 function showEmptyState() {
   document.getElementById('empty-state').classList.remove('hidden');
   document.getElementById('report-view').classList.add('hidden');
   document.getElementById('page-footer').classList.add('hidden');
+  document.getElementById('tab-bar').style.display = 'none';
 }
 
 function showReport() {
   document.getElementById('empty-state').classList.add('hidden');
   document.getElementById('report-view').classList.remove('hidden');
   document.getElementById('page-footer').classList.remove('hidden');
+  document.getElementById('tab-bar').style.display = '';
 }
 
 // ── Master Render ──────────────────────────────────────────────────────────
 function renderReport(data) {
   currentReportId = data.id;
+  currentReport   = data;
   showReport();
 
-  // Sync history select
   const sel = document.getElementById('report-select');
-  for (const opt of sel.options) {
-    opt.selected = (opt.value === data.id);
-  }
+  for (const opt of sel.options) opt.selected = (opt.value === data.id);
 
-  // Meta row
   document.getElementById('report-id-label').textContent = data.id;
   document.getElementById('report-ts-label').textContent = fmtTimestamp(data.created_at);
-  document.getElementById('footer-ts').textContent = fmtTimestamp(data.created_at);
+  document.getElementById('footer-ts').textContent       = fmtTimestamp(data.created_at);
 
+  // Pi-hole tab
   renderTraffic(data.traffic_data, data.client_names || {});
   renderBypass(data.bypass_data, data.client_names || {});
   renderRecommendations(data.rec_data);
   renderDevices(data.device_map || {}, data.risk_summary, data.client_names || {});
+
+  // Network Health tab
+  renderNetworkHealth(data.metrics_data);
+
+  // Security Events tab
+  renderSecurityEvents(data.firewall_data, data.fail2ban_data);
+
+  // Containers tab
+  renderContainers(data.fail2ban_data);
+
+  // Assessment tab
   renderAssessment(data.assessment_text);
 }
 
-// ── Traffic Section ────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// Pi-hole sections
+// ═══════════════════════════════════════════════════════════════════════════
+
 function renderTraffic(td, clientNames) {
   const s = td.summary;
   const pct = s.percent_blocked.toFixed(1);
   const cards = [
-    { label: 'Total Queries',   value: fmt(s.total),           sub: fmtSub('last 24h'), cls: '' },
-    { label: 'Blocked',         value: fmt(s.blocked),         sub: `${pct}% of total`, cls: 'blocked' },
-    { label: 'Allowed',         value: fmt(s.allowed),         sub: `${(100 - +pct).toFixed(1)}% passed`, cls: 'allowed' },
-    { label: 'Unique Domains',  value: fmt(s.unique_domains),  sub: 'distinct names seen', cls: '' },
-    { label: 'Active Clients',  value: `${s.active_clients}`,  sub: `of ${s.total_clients} total`, cls: '' },
-    { label: 'Gravity List',    value: fmtK(s.gravity_domains), sub: 'domains blocked', cls: '' },
+    { label: 'Total Queries',  value: fmt(s.total),           sub: 'last 24h',                  cls: '' },
+    { label: 'Blocked',        value: fmt(s.blocked),         sub: `${pct}% of total`,           cls: 'blocked' },
+    { label: 'Allowed',        value: fmt(s.allowed),         sub: `${(100 - +pct).toFixed(1)}% passed`, cls: 'allowed' },
+    { label: 'Unique Domains', value: fmt(s.unique_domains),  sub: 'distinct names seen',        cls: '' },
+    { label: 'Active Clients', value: `${s.active_clients}`,  sub: `of ${s.total_clients} total`, cls: '' },
+    { label: 'Gravity List',   value: fmtK(s.gravity_domains), sub: 'domains blocked',           cls: '' },
   ];
 
   document.getElementById('stat-cards').innerHTML = cards.map(c => `
@@ -695,7 +986,6 @@ function renderTraffic(td, clientNames) {
       <div class="stat-sub">${c.sub}</div>
     </div>`).join('');
 
-  // Top allowed domains
   document.getElementById('tbl-allowed').innerHTML = makeTable(
     ['#', 'Domain', 'Queries'],
     td.top_allowed.slice(0, 15).map((d, i) => [
@@ -705,7 +995,6 @@ function renderTraffic(td, clientNames) {
     ]),
   );
 
-  // Top blocked domains
   document.getElementById('tbl-blocked').innerHTML = makeTable(
     ['#', 'Domain', 'Queries'],
     td.top_blocked.slice(0, 15).map((d, i) => [
@@ -715,7 +1004,6 @@ function renderTraffic(td, clientNames) {
     ]),
   );
 
-  // Top clients
   document.getElementById('tbl-clients').innerHTML = makeTable(
     ['#', 'IP', 'Name', 'Queries'],
     td.top_clients.slice(0, 15).map((c, i) => {
@@ -730,45 +1018,42 @@ function renderTraffic(td, clientNames) {
   );
 }
 
-// ── Bypass Section ─────────────────────────────────────────────────────────
 function renderBypass(bd, clientNames) {
   const count = bd.findings.length;
   document.getElementById('bypass-count').textContent = `${count} finding${count !== 1 ? 's' : ''}`;
 
   let html = '';
-
   if (count === 0) {
     html = '<div class="alert alert-success">No DNS bypass indicators detected.</div>';
   } else {
-    const methodBadge = (m) => {
+    const methodBadge = m => {
       if (m === 'doh_lookup')      return '<span class="badge badge-doh">DoH/DoT</span>';
       if (m === 'ptr_lookup')      return '<span class="badge badge-ptr">PTR</span>';
       if (m === 'low_query_count') return '<span class="badge badge-low-q">Low Query</span>';
       return `<span class="badge">${esc(m)}</span>`;
     };
-
     html += makeTable(
       ['Client', 'Method', 'Detail', 'Count'],
       bd.findings.map(f => {
-        const name = clientNames[f.client_ip] || f.client_ip;
-        const label = (name !== f.client_ip) ? `${esc(name)} <span class="text-muted">(${esc(f.client_ip)})</span>` : `<code>${esc(f.client_ip)}</code>`;
+        const name  = clientNames[f.client_ip] || f.client_ip;
+        const label = name !== f.client_ip
+          ? `${esc(name)} <span class="text-muted">(${esc(f.client_ip)})</span>`
+          : `<code>${esc(f.client_ip)}</code>`;
         return [label, methodBadge(f.method), esc(f.detail), `<span class="num">${fmt(f.count)}</span>`];
       }),
     );
   }
 
-  // Flagged low-query clients
   const flagged = (bd.client_stats || []).filter(s => s.flagged);
   if (flagged.length > 0) {
     html += `<div class="alert alert-warning" style="margin-top:12px">
-      ⚠ ${flagged.length} client(s) have suspiciously low query counts — may be using hardcoded DNS.
+      &#9888; ${flagged.length} client(s) have suspiciously low query counts — may be using hardcoded DNS.
     </div>`;
   }
 
   document.getElementById('bypass-content').innerHTML = html;
 }
 
-// ── Recommendations Section ────────────────────────────────────────────────
 function renderRecommendations(rd) {
   const count = rd.recommendations.length;
   document.getElementById('rec-count').textContent = `${count} domain${count !== 1 ? 's' : ''}`;
@@ -784,10 +1069,7 @@ function renderRecommendations(rd) {
 
   for (const [cat, recs] of Object.entries(cats).sort()) {
     html += `<div class="category-block">
-      <div class="category-header">
-        ${esc(cat)}
-        <span class="cat-count">${recs.length} domain${recs.length !== 1 ? 's' : ''}</span>
-      </div>
+      <div class="category-header">${esc(cat)}<span class="cat-count">${recs.length} domain${recs.length !== 1 ? 's' : ''}</span></div>
       ${makeTable(
         ['Domain', 'Queries', 'Clients'],
         recs.slice(0, 20).map(r => [
@@ -802,12 +1084,10 @@ function renderRecommendations(rd) {
   document.getElementById('rec-content').innerHTML = html;
 }
 
-// ── Device Inventory Section ───────────────────────────────────────────────
 function renderDevices(deviceMap, riskSummary, clientNames) {
   const entries = Object.entries(deviceMap);
   document.getElementById('device-count').textContent = `${entries.length} device${entries.length !== 1 ? 's' : ''}`;
 
-  // Risk summary tiles
   if (riskSummary) {
     const rs = riskSummary;
     document.getElementById('risk-tiles').innerHTML = [
@@ -822,7 +1102,6 @@ function renderDevices(deviceMap, riskSummary, clientNames) {
       </div>`).join('');
   }
 
-  // Sort: high risk first, then by IP
   const riskOrder = { high: 0, medium: 1, low: 2, minimal: 3 };
   const sorted = entries.sort(([, a], [, b]) => {
     const rd = (riskOrder[a.privacy_risk] ?? 4) - (riskOrder[b.privacy_risk] ?? 4);
@@ -833,11 +1112,11 @@ function renderDevices(deviceMap, riskSummary, clientNames) {
     ['IP', 'Hostname', 'Device Type', 'Confidence', 'Risk'],
     sorted.map(([ip, info]) => {
       const hostname = clientNames[ip] || info.hostname || '';
-      const conf = info.manual_override
+      const conf     = info.manual_override
         ? '<span class="text-muted">manual</span>'
         : `${Math.round((info.confidence || 0) * 100)}%`;
       const typeFlag = info.device_type === 'Unknown device'
-        ? ' <span class="text-warning">⚠</span>' : '';
+        ? ' <span class="text-warning">&#9888;</span>' : '';
       return [
         `<code>${esc(ip)}</code>`,
         esc(hostname !== ip ? hostname : '—'),
@@ -849,7 +1128,311 @@ function renderDevices(deviceMap, riskSummary, clientNames) {
   );
 }
 
-// ── Assessment Section ─────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// Network Health tab
+// ═══════════════════════════════════════════════════════════════════════════
+
+function renderNetworkHealth(metricsData) {
+  const el    = document.getElementById('health-content');
+  const count = document.getElementById('health-count');
+
+  if (!metricsData || !metricsData.hosts || metricsData.hosts.length === 0) {
+    el.innerHTML = '<div class="alert alert-info">No Prometheus data in this report. Check PROMETHEUS_URL in .env.</div>';
+    count.textContent = '';
+    return;
+  }
+
+  const hosts = metricsData.hosts;
+  const upCount = hosts.filter(h => h.up).length;
+  count.textContent = `${upCount}/${hosts.length} up`;
+
+  let errHtml = '';
+  if (metricsData.errors && metricsData.errors.length) {
+    errHtml = metricsData.errors.map(e =>
+      `<div class="alert alert-warning" style="margin-bottom:12px">&#9888; ${esc(e)}</div>`
+    ).join('');
+  }
+
+  const cards = hosts.map(h => {
+    const dotClass = h.up ? 'up' : 'down';
+    const cardClass = h.up ? '' : 'host-down';
+
+    if (!h.up) {
+      return `<div class="host-card ${cardClass}">
+        <div class="host-header">
+          <div class="status-dot ${dotClass}"></div>
+          <span class="host-name">${esc(h.name)}</span>
+          <span class="host-ip">${esc(h.ip)}</span>
+        </div>
+        <div class="host-unavailable">No data — host down or exporter not reachable</div>
+      </div>`;
+    }
+
+    const cpuFill  = barFill(h.cpu_pct,  'cpu');
+    const ramFill  = barFill(h.ram_pct,  'ram');
+    const diskFill = barFill(h.disk_pct, 'disk');
+
+    const netInStr  = h.net_in_bps  != null ? fmtBps(h.net_in_bps)  : 'n/a';
+    const netOutStr = h.net_out_bps != null ? fmtBps(h.net_out_bps) : 'n/a';
+
+    return `<div class="host-card ${cardClass}">
+      <div class="host-header">
+        <div class="status-dot ${dotClass}"></div>
+        <span class="host-name">${esc(h.name)}</span>
+        <span class="host-ip">${esc(h.ip)}</span>
+      </div>
+      ${metricRow('CPU',  h.cpu_pct,  'cpu')}
+      ${metricRow('RAM',  h.ram_pct,  'ram')}
+      ${metricRow('DISK', h.disk_pct, 'disk')}
+      <div class="net-row">
+        <div class="net-item">&#8595; <span>${netInStr}</span></div>
+        <div class="net-item">&#8593; <span>${netOutStr}</span></div>
+      </div>
+    </div>`;
+  });
+
+  el.innerHTML = errHtml + `<div class="host-grid">${cards.join('')}</div>`;
+}
+
+function metricRow(label, val, type) {
+  if (val == null) {
+    return `<div class="metric-row">
+      <span class="metric-label">${label}</span>
+      <div class="metric-bar"></div>
+      <span class="metric-val text-muted">n/a</span>
+    </div>`;
+  }
+  const pct = Math.min(100, Math.max(0, val));
+  const cls = pct >= 90 ? 'high' : type;
+  return `<div class="metric-row">
+    <span class="metric-label">${label}</span>
+    <div class="metric-bar"><div class="metric-fill ${cls}" style="width:${pct.toFixed(1)}%"></div></div>
+    <span class="metric-val">${pct.toFixed(0)}%</span>
+  </div>`;
+}
+
+function barFill(val, type) {
+  if (val == null) return '';
+  const pct = Math.min(100, Math.max(0, val));
+  const cls = pct >= 90 ? 'high' : type;
+  return `<div class="metric-fill ${cls}" style="width:${pct.toFixed(1)}%"></div>`;
+}
+
+function fmtBps(bps) {
+  if (bps == null) return 'n/a';
+  if (bps >= 1e6) return (bps/1e6).toFixed(1) + ' MB/s';
+  if (bps >= 1e3) return (bps/1e3).toFixed(0) + ' KB/s';
+  return Math.round(bps) + ' B/s';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Security Events tab
+// ═══════════════════════════════════════════════════════════════════════════
+
+function renderSecurityEvents(firewallData, fail2banData) {
+  renderSuricata(firewallData);
+  renderFirewallBlocks(firewallData);
+  renderBanSummary(fail2banData);
+}
+
+function renderSuricata(fd) {
+  const el    = document.getElementById('suricata-content');
+  const badge = document.getElementById('sub-suricata-count');
+
+  if (!fd) {
+    el.innerHTML = '<div class="alert alert-info">No firewall/IDS data in this report.</div>';
+    badge.textContent = '';
+    return;
+  }
+
+  if (fd.errors && fd.errors.some(e => e.includes('Suricata'))) {
+    el.innerHTML = fd.errors.filter(e => e.includes('Suricata'))
+      .map(e => `<div class="alert alert-warning">&#9888; ${esc(e)}</div>`).join('');
+    badge.textContent = '';
+    return;
+  }
+
+  const alerts = fd.suricata_alerts || [];
+  badge.textContent = fd.alert_count ? ` (${fd.alert_count})` : '';
+
+  if (!alerts.length) {
+    el.innerHTML = '<div class="alert alert-success">No Suricata alerts found.</div>';
+    return;
+  }
+
+  const sevBadge = s => {
+    if (s === 1) return '<span class="badge badge-sev-1">HIGH</span>';
+    if (s === 2) return '<span class="badge badge-sev-2">MED</span>';
+    return '<span class="badge badge-sev-3">LOW</span>';
+  };
+
+  el.innerHTML = makeTable(
+    ['Severity', 'Timestamp', 'Alert', 'Source', 'Destination', 'Category'],
+    alerts.slice(0, 50).map(a => [
+      sevBadge(a.severity),
+      `<span class="mono">${esc(a.timestamp)}</span>`,
+      esc(a.alert),
+      `<code>${esc(a.src_ip)}</code>`,
+      `<code>${esc(a.dst_ip)}</code>`,
+      `<span class="text-muted">${esc(a.category)}</span>`,
+    ]),
+  );
+}
+
+function renderFirewallBlocks(fd) {
+  const el    = document.getElementById('fw-blocks-content');
+  const badge = document.getElementById('sub-blocks-count');
+
+  if (!fd) {
+    el.innerHTML = '<div class="alert alert-info">No firewall data in this report.</div>';
+    badge.textContent = '';
+    return;
+  }
+
+  badge.textContent = fd.block_count ? ` (${fd.block_count})` : '';
+
+  let html = '';
+
+  if (fd.top_blocked_ips && fd.top_blocked_ips.length) {
+    html += `<h3>Top Blocked Source IPs</h3>`;
+    html += makeTable(
+      ['Source IP', 'Block Count'],
+      fd.top_blocked_ips.slice(0, 20).map(item => [
+        `<code>${esc(item.ip)}</code>`,
+        `<span class="num text-danger">${fmt(item.count)}</span>`,
+      ]),
+    );
+  }
+
+  const blocks = fd.recent_blocks || [];
+  if (!blocks.length && !fd.top_blocked_ips?.length) {
+    el.innerHTML = '<div class="alert alert-success">No firewall block events in this sample.</div>';
+    return;
+  }
+
+  if (blocks.length) {
+    html += `<h3>Recent Block Events <span class="text-muted">(${blocks.length} shown)</span></h3>`;
+    html += makeTable(
+      ['Time', 'Action', 'Protocol', 'Source', 'Destination', 'Port', 'Interface'],
+      blocks.slice(0, 50).map(b => {
+        const actionBadge = b.action === 'block' || b.action === 'drop'
+          ? '<span class="badge badge-block">BLOCK</span>'
+          : '<span class="badge badge-pass">PASS</span>';
+        return [
+          `<span class="mono">${esc(b.timestamp)}</span>`,
+          actionBadge,
+          esc(b.protocol),
+          `<code>${esc(b.src_ip)}</code>`,
+          `<code>${esc(b.dst_ip)}</code>`,
+          esc(b.dst_port),
+          esc(b.interface),
+        ];
+      }),
+    );
+  }
+
+  el.innerHTML = html || '<div class="alert alert-success">No firewall block events.</div>';
+}
+
+function renderBanSummary(fd) {
+  const el    = document.getElementById('ban-summary-content');
+  const badge = document.getElementById('sub-bans-count');
+
+  if (!fd) {
+    el.innerHTML = '<div class="alert alert-info">No fail2ban data in this report.</div>';
+    badge.textContent = '';
+    return;
+  }
+
+  badge.textContent = fd.total_banned ? ` (${fd.total_banned} banned)` : '';
+
+  let html = '';
+
+  if (fd.total_banned === 0) {
+    html += '<div class="alert alert-success">No IPs currently banned across any container.</div>';
+  } else {
+    html += `<div class="alert alert-warning">
+      <strong>${fd.total_banned}</strong> IP(s) currently banned across ${fd.containers.length} container(s).
+    </div>`;
+  }
+
+  html += makeTable(
+    ['Container', 'CT ID', 'IP', 'Jails', 'Currently Banned', 'Total Bans', 'Status'],
+    (fd.containers || []).sort((a, b) => b.currently_banned - a.currently_banned).map(ct => {
+      const banVal = ct.currently_banned > 0
+        ? `<span class="text-warning font-bold">${ct.currently_banned}</span>`
+        : `<span class="text-muted">0</span>`;
+      const status = ct.error
+        ? `<span class="text-danger">&#10007; error</span>`
+        : `<span class="text-success">&#10003;</span>`;
+      return [
+        `<strong>${esc(ct.label)}</strong>`,
+        `<code>${esc(ct.ct_id)}</code>`,
+        `<code>${esc(ct.ip)}</code>`,
+        esc((ct.jails || []).join(', ') || '—'),
+        banVal,
+        `<span class="num">${fmt(ct.total_bans)}</span>`,
+        status,
+      ];
+    }),
+  );
+
+  el.innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Containers tab
+// ═══════════════════════════════════════════════════════════════════════════
+
+function renderContainers(fail2banData) {
+  const el    = document.getElementById('ct-content');
+  const count = document.getElementById('ct-count');
+
+  if (!fail2banData || !fail2banData.containers || fail2banData.containers.length === 0) {
+    el.innerHTML = '<div class="alert alert-info">No container data in this report. Check SSH key setup: CT107 → root@192.168.1.20.</div>';
+    count.textContent = '';
+    return;
+  }
+
+  const containers = fail2banData.containers;
+  count.textContent = `${containers.length} containers`;
+
+  const cards = containers.sort((a, b) => b.currently_banned - a.currently_banned).map(ct => {
+    const hasBans  = ct.currently_banned > 0;
+    const cardCls  = hasBans ? 'ct-card has-bans' : 'ct-card';
+    const banColor = hasBans ? 'banned' : '';
+    const jailStr  = ct.jails.length ? ct.jails.join(', ') : 'none';
+
+    let banIpsHtml = '';
+    if (ct.banned_ips && ct.banned_ips.length) {
+      banIpsHtml = `<div class="ct-ips">Banned: ${esc(ct.banned_ips.join(', '))}</div>`;
+    }
+
+    const errHtml = ct.error
+      ? `<div class="ct-error">&#10007; ${esc(ct.error)}</div>`
+      : '';
+
+    return `<div class="${cardCls}">
+      <div class="ct-header">
+        <span class="ct-name">${esc(ct.label)}</span>
+        <span class="ct-id">${ct.ct_id === 'host' ? 'host' : `CT${esc(ct.ct_id)}`}</span>
+      </div>
+      <div class="ct-ip">${esc(ct.ip)}</div>
+      <div class="ct-stat">Jails: <span class="val">${esc(jailStr)}</span></div>
+      <div class="ct-stat">Currently banned: <span class="val ${banColor}">${ct.currently_banned}</span></div>
+      <div class="ct-stat">Total bans: <span class="val">${ct.total_bans}</span></div>
+      ${banIpsHtml}
+      ${errHtml}
+    </div>`;
+  });
+
+  el.innerHTML = `<div class="ct-grid">${cards.join('')}</div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Assessment
+// ═══════════════════════════════════════════════════════════════════════════
+
 function renderAssessment(text) {
   if (!text) {
     document.getElementById('assessment-content').innerHTML =
@@ -859,34 +1442,139 @@ function renderAssessment(text) {
   document.getElementById('assessment-content').innerHTML = renderMarkdown(text);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Clear Logs Modal
+// ═══════════════════════════════════════════════════════════════════════════
+
+function openClearModal() {
+  const fd = currentReport && currentReport.fail2ban_data;
+  const checklist = document.getElementById('clear-checklist');
+  const result    = document.getElementById('modal-result');
+  result.classList.add('hidden');
+  result.innerHTML = '';
+
+  // Build checklist from fail2ban data (or fallback to known container list)
+  const containers = fd && fd.containers ? fd.containers : [];
+  const knownFallback = [
+    { ct_id: '100', label: 'jellyfin',       ip: '192.168.1.21', log_size: null },
+    { ct_id: '101', label: 'pihole',         ip: '192.168.1.24', log_size: null },
+    { ct_id: '102', label: 'immich',         ip: '192.168.1.22', log_size: null },
+    { ct_id: '103', label: 'audiobookshelf', ip: '192.168.1.23', log_size: null },
+    { ct_id: '104', label: 'nextcloud',      ip: '192.168.1.25', log_size: null },
+    { ct_id: '105', label: 'traefik',        ip: '192.168.1.27', log_size: null },
+    { ct_id: '106', label: 'ansible',        ip: '192.168.1.26', log_size: null },
+    { ct_id: 'host', label: 'proxmox host',  ip: '192.168.1.20', log_size: null },
+  ];
+
+  const items = containers.length ? [...containers, { ct_id: 'host', label: 'proxmox host', ip: '192.168.1.20' }] : knownFallback;
+
+  checklist.innerHTML = items.map(ct => {
+    const subLabel = `CT${ct.ct_id === 'host' ? '' : ct.ct_id} · ${ct.ip}`;
+    return `<label class="modal-check">
+      <input type="checkbox" value="${esc(ct.ct_id)}" ${ct.currently_banned > 0 ? 'checked' : ''}>
+      <div class="modal-check-info">
+        <div class="modal-check-label">${esc(ct.label)}</div>
+        <div class="modal-check-sub">${ct.ct_id === 'host' ? 'proxmox host' : subLabel}</div>
+      </div>
+      ${ct.currently_banned > 0 ? `<span class="modal-check-size text-warning">${ct.currently_banned} banned</span>` : ''}
+    </label>`;
+  }).join('');
+
+  document.getElementById('clear-exec-btn').disabled = false;
+  document.getElementById('clear-modal').classList.remove('hidden');
+}
+
+function closeClearModal() {
+  document.getElementById('clear-modal').classList.add('hidden');
+}
+
+function onModalOverlayClick(event) {
+  if (event.target === event.currentTarget) closeClearModal();
+}
+
+async function executeClearLogs() {
+  const checked = [...document.querySelectorAll('#clear-checklist input:checked')].map(el => el.value);
+  if (!checked.length) {
+    alert('Select at least one container.');
+    return;
+  }
+
+  const btn = document.getElementById('clear-exec-btn');
+  btn.disabled = true;
+  btn.textContent = 'Clearing…';
+
+  try {
+    const resp = await fetch('/api/logs/clear', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ container_ids: checked }),
+    });
+    const data = await resp.json();
+
+    const resultEl = document.getElementById('modal-result');
+    resultEl.classList.remove('hidden');
+
+    let html = '';
+    if (data.errors && data.errors.length) {
+      html += data.errors.map(e => `<div class="alert alert-danger">&#10007; ${esc(e)}</div>`).join('');
+    }
+
+    const totalMB = (data.total_bytes_freed / 1024 / 1024).toFixed(2);
+    html += `<div class="alert alert-success">
+      Done — ${data.results.filter(r => r.success).length} container(s) cleared.
+      ${data.total_bytes_freed > 0 ? `${totalMB} MB freed.` : ''}
+    </div>`;
+
+    html += makeTable(
+      ['Container', 'Status', 'Space Freed'],
+      (data.results || []).map(r => [
+        `<strong>${esc(r.label)}</strong>`,
+        r.success
+          ? '<span class="text-success">&#10003; cleared</span>'
+          : `<span class="text-danger">&#10007; ${esc(r.error || 'failed')}</span>`,
+        r.log_bytes_freed > 0 ? fmtBytes(r.log_bytes_freed) : '—',
+      ]),
+    );
+
+    resultEl.innerHTML = html;
+    btn.textContent = 'Done';
+  } catch (err) {
+    document.getElementById('modal-result').innerHTML =
+      `<div class="alert alert-danger">Request failed: ${esc(err.message)}</div>`;
+    document.getElementById('modal-result').classList.remove('hidden');
+    btn.disabled = false;
+    btn.textContent = 'Clear Selected';
+  }
+}
+
+function fmtBytes(bytes) {
+  if (bytes >= 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+  if (bytes >= 1024)        return (bytes / 1024).toFixed(0) + ' KB';
+  return bytes + ' B';
+}
+
 // ── Markdown Renderer ──────────────────────────────────────────────────────
 function renderMarkdown(text) {
-  // Escape HTML, then apply markdown rules
   let s = esc(text);
   const lines = s.split('\n');
-  const out = [];
+  const out   = [];
   let inUl = false, inOl = false, inP = false;
 
-  const flushBlock = () => {
+  const flush = () => {
     if (inUl) { out.push('</ul>'); inUl = false; }
     if (inOl) { out.push('</ol>'); inOl = false; }
     if (inP)  { out.push('</p>');  inP  = false; }
   };
 
   for (const raw of lines) {
-    const line = raw;
-
-    // Headers (##, ###, etc.)
-    const hm = line.match(/^(#{1,4}) (.+)/);
+    const hm = raw.match(/^(#{1,4}) (.+)/);
     if (hm) {
-      flushBlock();
-      const level = Math.min(hm[1].length, 4);
-      out.push(`<h${level}>${inlineFmt(hm[2])}</h${level}>`);
+      flush();
+      const lvl = Math.min(hm[1].length, 4);
+      out.push(`<h${lvl}>${inlineFmt(hm[2])}</h${lvl}>`);
       continue;
     }
-
-    // Unordered list
-    const ulm = line.match(/^[\-\*\+] (.+)/);
+    const ulm = raw.match(/^[\-\*\+] (.+)/);
     if (ulm) {
       if (inOl) { out.push('</ol>'); inOl = false; }
       if (inP)  { out.push('</p>');  inP  = false; }
@@ -894,9 +1582,7 @@ function renderMarkdown(text) {
       out.push(`<li>${inlineFmt(ulm[1])}</li>`);
       continue;
     }
-
-    // Ordered list
-    const olm = line.match(/^\d+\. (.+)/);
+    const olm = raw.match(/^\d+\. (.+)/);
     if (olm) {
       if (inUl) { out.push('</ul>'); inUl = false; }
       if (inP)  { out.push('</p>');  inP  = false; }
@@ -904,22 +1590,16 @@ function renderMarkdown(text) {
       out.push(`<li>${inlineFmt(olm[1])}</li>`);
       continue;
     }
-
-    // Close lists on non-list line
     if (inUl) { out.push('</ul>'); inUl = false; }
     if (inOl) { out.push('</ol>'); inOl = false; }
-
-    // Blank line
-    if (line.trim() === '') {
+    if (raw.trim() === '') {
       if (inP) { out.push('</p>'); inP = false; }
       continue;
     }
-
-    // Regular paragraph text
     if (!inP) { out.push('<p>'); inP = true; } else { out.push(' '); }
-    out.push(inlineFmt(line));
+    out.push(inlineFmt(raw));
   }
-  flushBlock();
+  flush();
   return out.join('');
 }
 
@@ -948,7 +1628,6 @@ function riskBadge(risk) {
 // ── Format Helpers ─────────────────────────────────────────────────────────
 function fmt(n)    { return Number(n).toLocaleString(); }
 function fmtK(n)   { return n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1e3 ? (n/1e3).toFixed(0)+'K' : String(n); }
-function fmtSub(s) { return s; }
 
 function fmtTimestamp(iso) {
   if (!iso) return '—';
@@ -963,10 +1642,10 @@ function fmtTimestamp(iso) {
 function esc(s) {
   if (s == null) return '';
   return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/&/g,  '&amp;')
+    .replace(/</g,  '&lt;')
+    .replace(/>/g,  '&gt;')
+    .replace(/"/g,  '&quot;');
 }
 </script>
 </body>

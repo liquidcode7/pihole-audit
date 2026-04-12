@@ -1,0 +1,24 @@
+# Traefik dynamic config for LiquidSystem
+#
+# Copy this file to your Traefik dynamic config directory on CT105 (192.168.1.27).
+# Typical path: /etc/traefik/dynamic/liquidsystem.yml
+# (or whatever directory `file.directory` points to in traefik.yml)
+#
+# LiquidSystem runs on CT107 (192.168.1.28) port 8000.
+
+http:
+  routers:
+    liquidsystem:
+      rule: "Host(`liquidsystem.tetrafuranose.com`)"
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: cloudflare
+      service: liquidsystem
+
+  services:
+    liquidsystem:
+      loadBalancer:
+        servers:
+          - url: "http://192.168.1.28:8000"
+        passHostHeader: true
