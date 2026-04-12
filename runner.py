@@ -11,6 +11,7 @@ import asyncio
 import dataclasses
 import datetime
 import os
+from pathlib import Path
 
 import assessment
 import bypass
@@ -64,6 +65,9 @@ async def run_analysis() -> dict:
         print(f"[runner] fail2ban fetch failed: {raw_fail2ban}")
 
     # --- Phase 3: AI assessment (blocking stream → run in thread) ---
+    reports_dir = Path(os.environ.get("REPORTS_DIR", "data/reports"))
+    historical_context = assessment.load_historical_context(reports_dir)
+
     assessment_text = await asyncio.to_thread(
         assessment.get_ai_assessment,
         traffic_data,
@@ -73,6 +77,7 @@ async def run_analysis() -> dict:
         metrics_data=metrics_data,
         firewall_data=firewall_data,
         fail2ban_data=fail2ban_data,
+        historical_context=historical_context,
     )
 
     now = datetime.datetime.now()
