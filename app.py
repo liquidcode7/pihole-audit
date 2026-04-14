@@ -17,10 +17,12 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import sqlite3
+import threading
 from contextlib import asynccontextmanager
-from datetime import datetime
-from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta
+from pathlib import Path
 
 import anthropic
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -117,6 +119,7 @@ async def _scheduled_run() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+    _prune_old_sessions()   # clean up stale chat sessions on startup
     scheduler.add_job(_scheduled_run, "cron", hour=SCHEDULE_HOUR, minute=0)
     scheduler.start()
     yield
@@ -291,11 +294,69 @@ async def api_logs_clear(req: ClearRequest) -> JSONResponse:
 
 
 # ---------------------------------------------------------------------------
-# Chat sessions
+# Chat sessions — SQLite-backed, survives restarts, 7-day TTL
 # ---------------------------------------------------------------------------
 
-# Keyed by session_id (string). Each value is a list of {role, content} dicts.
-_chat_sessions: dict[str, list[dict]] = {}
+_CHAT_DB_PATH = Path(os.environ.get("CHAT_DB", "data/chat_sessions.db"))
+_chat_db_lock = threading.Lock()
+
+
+def _chat_db() -> sqlite3.Connection:
+    _CHAT_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(_CHAT_DB_PATH))
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS sessions (
+            session_id TEXT PRIMARY KEY,
+            messages   TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+    return conn
+
+
+def _load_session(session_id: str) -> list[dict]:
+    with _chat_db_lock:
+        conn = _chat_db()
+        row = conn.execute(
+            "SELECT messages FROM sessions WHERE session_id = ?", (session_id,)
+        ).fetchone()
+        conn.close()
+    if row:
+        try:
+            return json.loads(row[0])
+        except Exception:
+            return []
+    return []
+
+
+def _save_session(session_id: str, messages: list[dict]) -> None:
+    with _chat_db_lock:
+        conn = _chat_db()
+        conn.execute(
+            "INSERT OR REPLACE INTO sessions (session_id, messages, updated_at) VALUES (?,?,?)",
+            (session_id, json.dumps(messages), datetime.now().isoformat()),
+        )
+        conn.commit()
+        conn.close()
+
+
+def _delete_session(session_id: str) -> None:
+    with _chat_db_lock:
+        conn = _chat_db()
+        conn.execute("DELETE FROM sessions WHERE session_id = ?", (session_id,))
+        conn.commit()
+        conn.close()
+
+
+def _prune_old_sessions() -> None:
+    """Delete sessions not updated in the last 7 days."""
+    cutoff = (datetime.now() - timedelta(days=7)).isoformat()
+    with _chat_db_lock:
+        conn = _chat_db()
+        conn.execute("DELETE FROM sessions WHERE updated_at < ?", (cutoff,))
+        conn.commit()
+        conn.close()
 
 _CHAT_SYSTEM_PROMPT = """\
 You are a network security and privacy analyst who has just completed a full DNS \
@@ -327,19 +388,54 @@ Use markdown — the UI renders it.
 
 
 def _build_chat_system(report: dict) -> str:
-    """Build the system prompt with live audit context from a report dict."""
+    """Build the system prompt with full audit context from a report dict."""
     from bypass import BypassData
     from device_identifier import DeviceInfo
     from recommender import RecommenderData
     from traffic import TrafficData
 
     try:
-        traffic = TrafficData(**report["traffic_data"]) if report.get("traffic_data") else None
-        bypass  = BypassData(**report["bypass_data"])   if report.get("bypass_data")  else None
-        rec     = RecommenderData(**report["rec_data"])  if report.get("rec_data")     else None
+        traffic     = TrafficData(**report["traffic_data"])    if report.get("traffic_data") else None
+        bypass      = BypassData(**report["bypass_data"])      if report.get("bypass_data")  else None
+        rec         = RecommenderData(**report["rec_data"])     if report.get("rec_data")     else None
         raw_devices = report.get("device_map") or {}
-        devices = {ip: DeviceInfo(**info) for ip, info in raw_devices.items()}
-        context = build_audit_context(traffic, bypass, rec, devices)
+        devices     = {ip: DeviceInfo(**info) for ip, info in raw_devices.items()}
+
+        # Phase 2 data — reconstruct typed objects for the context builder
+        from metrics import MetricsData, HostMetrics
+        from firewall import FirewallData, FirewallEvent, SuricataAlert
+        from fail2ban import Fail2banData, ContainerBans
+
+        def _load(cls, key):
+            raw = report.get(key)
+            if not raw:
+                return None
+            try:
+                return cls(**raw)
+            except Exception:
+                return None
+
+        metrics_data  = _load(MetricsData,  "metrics_data")
+        firewall_data = _load(FirewallData, "firewall_data")
+        fail2ban_data = _load(Fail2banData, "fail2ban_data")
+
+        # Correlations (simple namespace object)
+        from correlate import CorrelationReport, CorrelatedThreat
+        corr_raw = report.get("correlations")
+        correlation_report = None
+        if corr_raw:
+            try:
+                correlation_report = CorrelationReport(**corr_raw)
+            except Exception:
+                pass
+
+        bans_delta = report.get("bans_delta") or {}
+
+        context = build_audit_context(
+            traffic, bypass, rec, devices,
+            metrics_data, firewall_data, fail2ban_data,
+            correlation_report, bans_delta,
+        )
     except Exception:
         context = "(Audit data could not be parsed — answer based on general home lab security best practices.)"
 
@@ -382,7 +478,7 @@ async def api_chat(req: ChatRequest) -> StreamingResponse:
 
     system_prompt = _build_chat_system(report)
 
-    history = _chat_sessions.setdefault(req.session_id, [])
+    history = _load_session(req.session_id)
     history.append({"role": "user", "content": req.message})
 
     # Snapshot messages for the thread (history is mutable)
@@ -425,6 +521,7 @@ async def api_chat(req: ChatRequest) -> StreamingResponse:
 
         response_text = "".join(full_text)
         history.append({"role": "assistant", "content": response_text})
+        _save_session(req.session_id, history)
         yield f"data: {json.dumps({'done': True})}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
@@ -433,13 +530,62 @@ async def api_chat(req: ChatRequest) -> StreamingResponse:
 @app.post("/api/chat/reset")
 async def api_chat_reset(req: ChatResetRequest) -> JSONResponse:
     """Clear conversation history for a session."""
-    _chat_sessions.pop(req.session_id, None)
+    _delete_session(req.session_id)
     return JSONResponse({"status": "cleared"})
 
 
 # ---------------------------------------------------------------------------
-# Static files and root
+# Pi-hole domain blocking
 # ---------------------------------------------------------------------------
+
+class BlockRequest(BaseModel):
+    domain: str
+    comment: str = "blocked via LiquidSystem"
+
+
+@app.post("/api/pihole/block")
+async def api_pihole_block(req: BlockRequest) -> JSONResponse:
+    """Add a domain to Pi-hole's gravity blocklist directly from the dashboard."""
+    domain = req.domain.strip().lower()
+    if not domain or "/" in domain or " " in domain:
+        raise HTTPException(status_code=400, detail="Invalid domain")
+
+    from client import PiholeClient
+    try:
+        async with PiholeClient() as client:
+            result = await client.block_domain(domain, comment=req.comment)
+        return JSONResponse({"status": "blocked", "domain": domain, "result": result})
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Pi-hole block failed: {exc}")
+
+
+@app.get("/api/trends")
+async def api_trends() -> JSONResponse:
+    """Return time-series data across all saved reports for trend charts."""
+    points = []
+    for path in sorted(DATA_DIR.glob("*.json"), key=lambda p: p.name):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            s    = (data.get("traffic_data") or {}).get("summary") or {}
+            fd   = data.get("firewall_data") or {}
+            f2b  = data.get("fail2ban_data") or {}
+            corr = data.get("correlations")  or {}
+            points.append({
+                "id":           data.get("id", path.stem),
+                "created_at":   data.get("created_at", ""),
+                "total_queries":    s.get("total", 0),
+                "percent_blocked":  round(s.get("percent_blocked", 0), 1),
+                "active_clients":   s.get("active_clients", 0),
+                "unique_domains":   s.get("unique_domains", 0),
+                "gravity_domains":  s.get("gravity_domains", 0),
+                "suricata_alerts":  fd.get("alert_count", 0),
+                "fw_blocks":        fd.get("block_count", 0),
+                "f2b_banned":       f2b.get("total_banned", 0),
+                "threat_count":     len(corr.get("threats") or []),
+            })
+        except Exception:
+            continue
+    return JSONResponse(points)
 
 app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 

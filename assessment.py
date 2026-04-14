@@ -225,6 +225,32 @@ def _build_fail2ban_summary(fail2ban_data) -> str:
     return "\n".join(lines)
 
 
+def _build_correlation_summary(correlation_report, bans_delta: dict[str, int] | None = None) -> str:
+    """Build a pre-computed cross-source threat correlation block for the AI prompt."""
+    threats = getattr(correlation_report, "threats", []) or []
+    if not threats:
+        # Still include ban delta even if no correlations
+        lines = ["\n=== CROSS-SOURCE THREAT CORRELATION ==="]
+        lines.append("  No IPs found in multiple data sources simultaneously.")
+    else:
+        lines = [f"\n=== CROSS-SOURCE THREAT CORRELATION ({len(threats)} IPs flagged) ==="]
+        lines.append("  IPs appearing in 2+ data sources — highest-confidence threats:\n")
+        for t in threats:
+            internal_flag = " [INTERNAL LAN IP — possible compromised device]" if t.internal else ""
+            lines.append(f"  {t.ip}  severity={t.severity.upper()}  sources={'+'.join(t.sources)}{internal_flag}")
+            for d in t.details:
+                lines.append(f"    • {d}")
+
+    if bans_delta:
+        new_bans = {label: delta for label, delta in bans_delta.items() if delta > 0}
+        if new_bans:
+            lines.append("\n  Ban rate since last report:")
+            for label, delta in sorted(new_bans.items(), key=lambda x: -x[1]):
+                lines.append(f"    {label}: +{delta} new bans")
+
+    return "\n".join(lines)
+
+
 def _fmt_bps(bps: float) -> str:
     if bps >= 1_000_000:
         return f"{bps/1_000_000:.1f}MB/s"
@@ -251,6 +277,17 @@ def _compress_historical_report(report: dict) -> str:
             f"{s.get('active_clients', 0)} active clients"
         )
 
+    # Top domains (new — lets Claude spot newly-appearing or disappearing domains)
+    td = report.get("traffic_data") or {}
+    top_allowed = td.get("top_allowed") or []
+    top_blocked = td.get("top_blocked") or []
+    if top_allowed:
+        allowed_str = ", ".join(d["domain"] for d in top_allowed[:5])
+        lines.append(f"  Top allowed: {allowed_str}")
+    if top_blocked:
+        blocked_str = ", ".join(d["domain"] for d in top_blocked[:5])
+        lines.append(f"  Top blocked: {blocked_str}")
+
     # Bypass & recommendations
     bypass_count = len((report.get("bypass_data") or {}).get("findings") or [])
     rec_count = len((report.get("rec_data") or {}).get("recommendations") or [])
@@ -265,35 +302,63 @@ def _compress_historical_report(report: dict) -> str:
             f"low={rs.get('low_risk', 0)} minimal={rs.get('minimal_risk', 0)}"
         )
 
-    # System metrics (per host)
+    # System metrics (per host, now includes network throughput)
     md = report.get("metrics_data") or {}
     for h in md.get("hosts") or []:
         cpu  = h.get("cpu_pct")
         ram  = h.get("ram_pct")
         disk = h.get("disk_pct")
+        net_in  = h.get("net_in_bps")
+        net_out = h.get("net_out_bps")
         status = "UP" if h.get("up") else "DOWN"
-        cpu_s  = f"{cpu:.1f}%"  if cpu  is not None else "n/a"
-        ram_s  = f"{ram:.1f}%"  if ram  is not None else "n/a"
-        disk_s = f"{disk:.1f}%" if disk is not None else "n/a"
+        cpu_s   = f"{cpu:.1f}%"  if cpu  is not None else "n/a"
+        ram_s   = f"{ram:.1f}%"  if ram  is not None else "n/a"
+        disk_s  = f"{disk:.1f}%" if disk is not None else "n/a"
+        net_s   = (
+            f" NetIn={_fmt_bps(net_in)} NetOut={_fmt_bps(net_out)}"
+            if net_in is not None else ""
+        )
         lines.append(
-            f"  {h.get('name', '?')} [{status}]: CPU={cpu_s} RAM={ram_s} Disk={disk_s}"
+            f"  {h.get('name', '?')} [{status}]: CPU={cpu_s} RAM={ram_s} Disk={disk_s}{net_s}"
         )
 
-    # Firewall / Suricata
+    # Firewall / Suricata + top blocked IPs
     fd = report.get("firewall_data") or {}
     if fd:
         lines.append(
             f"  Firewall: {fd.get('block_count', 0)} blocks  "
             f"Suricata: {fd.get('alert_count', 0)} alerts"
         )
+        top_fw = fd.get("top_blocked_ips") or []
+        if top_fw:
+            top_fw_str = ", ".join(
+                (item["ip"] if isinstance(item, dict) else item)
+                for item in top_fw[:5]
+            )
+            lines.append(f"  Top blocked IPs: {top_fw_str}")
 
-    # Fail2ban
+    # Fail2ban + ban delta
     f2b = report.get("fail2ban_data") or {}
     if f2b:
         lines.append(
             f"  Fail2ban: {f2b.get('total_banned', 0)} banned  "
             f"{f2b.get('total_jails', 0)} jails"
         )
+    bans_delta = report.get("bans_delta") or {}
+    if bans_delta:
+        delta_str = "  Ban deltas: " + ", ".join(
+            f"{label}: +{d}" for label, d in bans_delta.items() if d > 0
+        )
+        if delta_str != "  Ban deltas: ":
+            lines.append(delta_str)
+
+    # Correlations
+    corr = report.get("correlations") or {}
+    threats = corr.get("threats") or []
+    if threats:
+        lines.append(f"  Cross-source threats: {len(threats)} IPs flagged in multiple sources")
+        for t in threats[:3]:
+            lines.append(f"    {t['ip']} [{t['severity']}]: {', '.join(t['sources'])}")
 
     return "\n".join(lines)
 
@@ -336,6 +401,8 @@ def build_audit_context(
     metrics_data=None,
     firewall_data=None,
     fail2ban_data=None,
+    correlation_report=None,
+    bans_delta: dict[str, int] | None = None,
 ) -> str:
     """Return the full audit data as a plain-text string for embedding in prompts."""
     findings = _build_findings_summary(traffic_data, bypass_data, rec_data)
@@ -344,6 +411,8 @@ def build_audit_context(
     findings += _build_metrics_summary(metrics_data)
     findings += _build_firewall_summary(firewall_data)
     findings += _build_fail2ban_summary(fail2ban_data)
+    if correlation_report is not None:
+        findings += _build_correlation_summary(correlation_report, bans_delta)
     return findings
 
 
@@ -355,6 +424,8 @@ def get_ai_assessment(
     metrics_data=None,
     firewall_data=None,
     fail2ban_data=None,
+    correlation_report=None,
+    bans_delta: dict[str, int] | None = None,
     historical_context: str | None = None,
 ) -> str:
     """Stream a holistic AI security assessment from Claude and return the full text."""
@@ -365,6 +436,7 @@ def get_ai_assessment(
     findings = build_audit_context(
         traffic_data, bypass_data, rec_data, device_map,
         metrics_data, firewall_data, fail2ban_data,
+        correlation_report, bans_delta,
     )
 
     has_metrics  = metrics_data  is not None and not getattr(metrics_data,  "errors", True)

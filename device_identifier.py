@@ -387,6 +387,7 @@ ALTERNATIVE_THRESHOLD = 0.15   # show alt if confidence within this delta of win
 async def identify_devices(
     client: PiholeClient,
     client_names: dict[str, str] | None = None,
+    mac_vendors: dict[str, str] | None = None,
     max_queries: int = 10_000,
     aliases_path: str = "devices.json",
 ) -> dict[str, DeviceInfo]:
@@ -394,8 +395,11 @@ async def identify_devices(
 
     Returns a dict mapping IP address → DeviceInfo.
     Manual aliases from devices.json always override fingerprinting.
+    mac_vendors is an IP → vendor string map used as a hint when DNS
+    confidence is below threshold.
     """
     names = client_names or {}
+    vendors = mac_vendors or {}
     aliases = _load_aliases(aliases_path)
 
     queries = await _fetch_queries(client, max_queries)
@@ -415,6 +419,7 @@ async def identify_devices(
 
     for ip in all_ips:
         hostname = names.get(ip, ip)
+        vendor   = vendors.get(ip)
 
         # Manual override takes priority
         if ip in aliases:
@@ -434,14 +439,18 @@ async def identify_devices(
         domains = client_domains.get(ip, set())
 
         if not domains:
+            device_type = f"{vendor} device" if vendor else "Unknown device"
             result[ip] = DeviceInfo(
                 ip=ip,
                 hostname=hostname,
-                device_type="Unknown device",
+                device_type=device_type,
                 confidence=0.0,
                 matched_patterns=[],
-                privacy_risk="minimal",
-                notes="No DNS queries observed for this client.",
+                privacy_risk=_infer_risk_from_label(device_type),
+                notes=(
+                    f"No DNS queries observed. MAC vendor: {vendor}."
+                    if vendor else "No DNS queries observed for this client."
+                ),
             )
             continue
 
@@ -455,14 +464,21 @@ async def identify_devices(
         best_conf, best_matched, best_sig = scores[0]
 
         if best_conf < CONFIDENCE_THRESHOLD:
+            # Use MAC vendor as a fallback hint when DNS is ambiguous
+            device_type = f"{vendor} device" if vendor else "Unknown device"
             result[ip] = DeviceInfo(
                 ip=ip,
                 hostname=hostname,
-                device_type="Unknown device",
+                device_type=device_type,
                 confidence=best_conf,
                 matched_patterns=best_matched,
-                privacy_risk="minimal",
-                notes="No strong signature match. Add a manual label to devices.json.",
+                privacy_risk=_infer_risk_from_label(device_type),
+                notes=(
+                    f"Low DNS confidence. MAC vendor hint: {vendor}. "
+                    "Add a manual label to devices.json for a definitive match."
+                    if vendor else
+                    "No strong signature match. Add a manual label to devices.json."
+                ),
             )
             continue
 
@@ -472,6 +488,7 @@ async def identify_devices(
             if conf > 0 and (best_conf - conf) <= ALTERNATIVE_THRESHOLD:
                 alternatives.append((sig.device_type, conf))
 
+        vendor_note = f" (MAC vendor: {vendor})" if vendor else ""
         result[ip] = DeviceInfo(
             ip=ip,
             hostname=hostname,
@@ -479,7 +496,7 @@ async def identify_devices(
             confidence=best_conf,
             matched_patterns=best_matched,
             privacy_risk=best_sig.privacy_risk,
-            notes=best_sig.notes,
+            notes=best_sig.notes + vendor_note,
             alternatives=alternatives,
         )
 

@@ -16,7 +16,11 @@ from dotenv import load_dotenv
 
 from assessment import MODEL, build_audit_context
 from bypass import BypassData
+from correlate import CorrelationReport
 from device_identifier import DeviceInfo
+from fail2ban import Fail2banData
+from firewall import FirewallData
+from metrics import MetricsData
 from recommender import RecommenderData
 from traffic import TrafficData
 
@@ -94,6 +98,11 @@ def start_conversation(
     rec_data: RecommenderData,
     device_map: dict[str, DeviceInfo],
     initial_assessment: str,
+    metrics_data: MetricsData | None = None,
+    firewall_data: FirewallData | None = None,
+    fail2ban_data: Fail2banData | None = None,
+    correlation_report: CorrelationReport | None = None,
+    bans_delta: dict[str, int] | None = None,
 ) -> list[dict]:
     """Run the interactive conversation loop after the AI assessment.
 
@@ -105,7 +114,17 @@ def start_conversation(
         print("\n[Conversation mode unavailable — ANTHROPIC_API_KEY not set]\n")
         return []
 
-    audit_context = build_audit_context(traffic_data, bypass_data, rec_data, device_map)
+    audit_context = build_audit_context(
+        traffic_data,
+        bypass_data,
+        rec_data,
+        device_map,
+        metrics_data=metrics_data,
+        firewall_data=firewall_data,
+        fail2ban_data=fail2ban_data,
+        correlation_report=correlation_report,
+        bans_delta=bans_delta,
+    )
     system = _SYSTEM_PROMPT.format(audit_context=audit_context)
     client = anthropic.Anthropic(api_key=api_key)
 

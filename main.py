@@ -12,7 +12,11 @@ from rich.table import Table
 import assessment
 import bypass
 import conversation
+import correlate
 import device_identifier
+import fail2ban
+import firewall
+import metrics
 import recommender
 import report
 import traffic
@@ -49,7 +53,10 @@ async def _run() -> None:
 
     async with PiholeClient() as client:
         console.print("[bold cyan]pihole-audit[/] — fetching data…")
-        client_names = await client.get_client_names()
+        client_names, mac_vendors = await asyncio.gather(
+            client.get_client_names(),
+            client.get_mac_vendors(),
+        )
         traffic_data, bypass_data, rec_data, device_map = await asyncio.gather(
             traffic.fetch(client, client_names=client_names),
             bypass.fetch(client, client_names=client_names),
@@ -57,11 +64,30 @@ async def _run() -> None:
             device_identifier.identify_devices(
                 client,
                 client_names=client_names,
+                mac_vendors=mac_vendors,
                 aliases_path=aliases_path,
             ),
         )
 
     risk_summary = device_identifier.network_risk_summary(device_map)
+
+    # Phase 2: independent sources
+    raw_metrics, raw_firewall, raw_fail2ban = await asyncio.gather(
+        metrics.fetch(),
+        firewall.fetch(),
+        fail2ban.fetch(),
+        return_exceptions=True,
+    )
+    metrics_data  = None if isinstance(raw_metrics,  Exception) else raw_metrics
+    firewall_data = None if isinstance(raw_firewall, Exception) else raw_firewall
+    fail2ban_data = None if isinstance(raw_fail2ban, Exception) else raw_fail2ban
+
+    # Cross-source correlation
+    correlation_report = correlate.correlate(
+        bypass_data=bypass_data,
+        firewall_data=firewall_data,
+        fail2ban_data=fail2ban_data,
+    )
 
     # Summary
     s = traffic_data.summary
@@ -217,7 +243,9 @@ async def _run() -> None:
     console.print("\n[bold magenta]AI Assessment[/]  [dim](streaming from Claude…)[/]\n")
     console.rule(style="magenta")
     assessment_text = assessment.get_ai_assessment(
-        traffic_data, bypass_data, rec_data, device_map=device_map
+        traffic_data, bypass_data, rec_data, device_map=device_map,
+        metrics_data=metrics_data, firewall_data=firewall_data,
+        fail2ban_data=fail2ban_data, correlation_report=correlation_report,
     )
     console.rule(style="magenta")
     console.print(
@@ -230,7 +258,9 @@ async def _run() -> None:
 
     # --- Interactive Conversation ---
     chat_history = conversation.start_conversation(
-        traffic_data, bypass_data, rec_data, device_map, assessment_text
+        traffic_data, bypass_data, rec_data, device_map, assessment_text,
+        metrics_data=metrics_data, firewall_data=firewall_data,
+        fail2ban_data=fail2ban_data, correlation_report=correlation_report,
     )
 
     # --- HTML Report (generated after conversation so transcript can be included) ---
