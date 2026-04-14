@@ -1,8 +1,9 @@
 """LiquidSystem runner — orchestrates the full analysis pipeline.
 
-Pi-hole data runs first (requires auth), then Prometheus / OPNsense / fail2ban
-run in parallel since they're independent. The AI assessment receives all data
-and analyzes everything holistically.
+Pi-hole data runs first (requires auth), then Prometheus / OPNsense /
+fail2ban / Traefik / Loki / URLhaus run in parallel since they are
+independent. The AI assessment receives all data and analyzes everything
+holistically.
 """
 
 from __future__ import annotations
@@ -19,9 +20,12 @@ import correlate
 import device_identifier
 import fail2ban
 import firewall
+import loki
 import metrics
 import recommender
+import traefik
 import traffic
+import urlhaus
 from client import PiholeClient
 
 
@@ -49,25 +53,37 @@ async def run_analysis() -> dict:
 
     risk_summary = device_identifier.network_risk_summary(device_map)
 
-    # --- Phase 2: Independent data sources (parallel) ---
-    raw_metrics, raw_firewall, raw_fail2ban = await asyncio.gather(
-        metrics.fetch(),
-        firewall.fetch(),
-        fail2ban.fetch(),
-        return_exceptions=True,
+    # --- Phase 2: Independent data sources (all parallel) ---
+    # URLhaus runs here because it needs traffic_data.top_allowed from Phase 1.
+    raw_metrics, raw_firewall, raw_fail2ban, raw_traefik, raw_loki, raw_urlhaus = (
+        await asyncio.gather(
+            metrics.fetch(),
+            firewall.fetch(),
+            fail2ban.fetch(),
+            traefik.fetch(),
+            loki.fetch(),
+            urlhaus.check(traffic_data.top_allowed),
+            return_exceptions=True,
+        )
     )
 
     metrics_data  = None if isinstance(raw_metrics,  Exception) else raw_metrics
     firewall_data = None if isinstance(raw_firewall, Exception) else raw_firewall
     fail2ban_data = None if isinstance(raw_fail2ban, Exception) else raw_fail2ban
+    traefik_data  = None if isinstance(raw_traefik,  Exception) else raw_traefik
+    loki_data     = None if isinstance(raw_loki,     Exception) else raw_loki
+    urlhaus_data  = None if isinstance(raw_urlhaus,  Exception) else raw_urlhaus
 
-    # Log any phase-2 failures to stdout (shows in uvicorn logs)
-    if isinstance(raw_metrics,  Exception):
-        print(f"[runner] metrics fetch failed: {raw_metrics}")
-    if isinstance(raw_firewall, Exception):
-        print(f"[runner] firewall fetch failed: {raw_firewall}")
-    if isinstance(raw_fail2ban, Exception):
-        print(f"[runner] fail2ban fetch failed: {raw_fail2ban}")
+    for label, result in [
+        ("metrics",  raw_metrics),
+        ("firewall", raw_firewall),
+        ("fail2ban", raw_fail2ban),
+        ("traefik",  raw_traefik),
+        ("loki",     raw_loki),
+        ("urlhaus",  raw_urlhaus),
+    ]:
+        if isinstance(result, Exception):
+            print(f"[runner] {label} fetch failed: {result}")
 
     # --- Ban rate delta: compare total_bans against previous report ---
     bans_delta: dict[str, int] = {}
@@ -94,7 +110,11 @@ async def run_analysis() -> dict:
         bypass_data=bypass_data,
         firewall_data=firewall_data,
         fail2ban_data=fail2ban_data,
+        urlhaus_data=urlhaus_data,
     )
+
+    # --- Phase 2.6: Reputation enrichment (AbuseIPDB + CrowdSec CTI) ---
+    await correlate.enrich_reputation(correlation_report)
 
     # --- Phase 3: AI assessment (blocking stream → run in thread) ---
     reports_dir = Path(os.environ.get("REPORTS_DIR", "data/reports"))
@@ -109,6 +129,9 @@ async def run_analysis() -> dict:
         metrics_data=metrics_data,
         firewall_data=firewall_data,
         fail2ban_data=fail2ban_data,
+        traefik_data=traefik_data,
+        loki_data=loki_data,
+        urlhaus_data=urlhaus_data,
         correlation_report=correlation_report,
         historical_context=historical_context,
     )
@@ -130,9 +153,12 @@ async def run_analysis() -> dict:
         "metrics_data":  dataclasses.asdict(metrics_data)  if metrics_data  else None,
         "firewall_data": dataclasses.asdict(firewall_data) if firewall_data else None,
         "fail2ban_data": dataclasses.asdict(fail2ban_data) if fail2ban_data else None,
+        "traefik_data":  dataclasses.asdict(traefik_data)  if traefik_data  else None,
+        "loki_data":     dataclasses.asdict(loki_data)     if loki_data     else None,
+        "urlhaus_data":  dataclasses.asdict(urlhaus_data)  if urlhaus_data  else None,
         # Derived data
-        "bans_delta":         bans_delta,
-        "correlations":       dataclasses.asdict(correlation_report),
+        "bans_delta":   bans_delta,
+        "correlations": dataclasses.asdict(correlation_report),
         # Assessment
         "assessment_text": assessment_text,
     }

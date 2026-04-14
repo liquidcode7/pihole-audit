@@ -196,6 +196,29 @@ def _build_firewall_summary(firewall_data) -> str:
                 f"  [{sev}] {a.timestamp} | {a.alert} | "
                 f"{a.src_ip} → {a.dst_ip} | cat={a.category}"
             )
+
+    # DHCP leases — ground truth device list from OPNsense
+    dhcp_leases = getattr(firewall_data, "dhcp_leases", []) or []
+    if dhcp_leases:
+        lines.append(f"DHCP leases (OPNsense ground truth): {len(dhcp_leases)} active device(s)")
+        for lease in dhcp_leases[:20]:
+            hostname_str = f" ({lease.hostname})" if lease.hostname else ""
+            lines.append(f"  {lease.ip}{hostname_str}  MAC={lease.mac}  if={lease.interface}")
+
+    # Firmware patch status
+    fw_current = getattr(firewall_data, "firmware_current", None)
+    fw_latest  = getattr(firewall_data, "firmware_latest", None)
+    fw_update  = getattr(firewall_data, "firmware_update_available", False)
+    if fw_current:
+        if fw_update:
+            lines.append(
+                f"OPNsense firmware: {fw_current} → UPDATE AVAILABLE: {fw_latest} "
+                "(security risk — apply immediately)"
+            )
+        else:
+            latest_str = f" (latest: {fw_latest})" if fw_latest else ""
+            lines.append(f"OPNsense firmware: {fw_current}{latest_str} — up to date")
+
     return "\n".join(lines)
 
 
@@ -225,6 +248,92 @@ def _build_fail2ban_summary(fail2ban_data) -> str:
     return "\n".join(lines)
 
 
+def _build_urlhaus_summary(urlhaus_data) -> str:
+    if urlhaus_data is None:
+        return ""
+    lines = ["\n=== URLHAUS MALWARE DOMAIN CHECK (Abuse.ch) ==="]
+    if getattr(urlhaus_data, "error", None):
+        lines.append(f"  [error] {urlhaus_data.error}")
+        return "\n".join(lines)
+    hits = getattr(urlhaus_data, "hits", []) or []
+    feed_size = getattr(urlhaus_data, "feed_domain_count", 0)
+    checked = getattr(urlhaus_data, "domains_checked", 0)
+    cached = "cached" if getattr(urlhaus_data, "from_cache", False) else "fresh"
+    lines.append(
+        f"Feed size: {feed_size:,} active malware domains ({cached})  "
+        f"Domains checked: {checked}"
+    )
+    if not hits:
+        lines.append("  No matches — none of your top-allowed domains appear in the URLhaus feed.")
+    else:
+        lines.append(f"  ALERT: {len(hits)} of your allowed domain(s) matched the URLhaus malware feed:")
+        for h in hits:
+            lines.append(f"  {h.domain}  ({h.query_count:,} DNS queries)")
+            for url in (getattr(h, "sample_urls", []) or [])[:3]:
+                lines.append(f"    URLhaus entry: {url}")
+    return "\n".join(lines)
+
+
+def _build_traefik_summary(traefik_data) -> str:
+    if traefik_data is None:
+        return ""
+    lines = ["\n=== TRAEFIK ACCESS LOG ANALYSIS ==="]
+    if getattr(traefik_data, "error", None):
+        lines.append(f"  [error] {traefik_data.error}")
+        return "\n".join(lines)
+    stats = getattr(traefik_data, "stats", None)
+    if stats is None:
+        lines.append("  No stats parsed.")
+        return "\n".join(lines)
+    log_lines = getattr(traefik_data, "log_lines_parsed", 0)
+    lines.append(
+        f"Log lines parsed: {log_lines:,}  "
+        f"Total requests: {stats.total_requests:,}  "
+        f"Auth failures (401): {stats.auth_failures}  "
+        f"Server errors (5xx): {stats.server_errors}"
+    )
+    if stats.scanner_hits:
+        lines.append(f"Scanner/probe requests detected: {len(stats.scanner_hits)}")
+        scanner_ips: dict[str, int] = {}
+        for hit in stats.scanner_hits:
+            scanner_ips[hit.client_ip] = scanner_ips.get(hit.client_ip, 0) + 1
+        for ip, count in sorted(scanner_ips.items(), key=lambda x: -x[1])[:5]:
+            lines.append(f"  {ip}: {count} probe request(s)")
+        sample_paths = list({h.path for h in stats.scanner_hits})[:5]
+        lines.append(f"  Probed paths: {', '.join(sample_paths)}")
+    if stats.top_client_ips:
+        lines.append("Top request sources:")
+        for ip, count in stats.top_client_ips[:5]:
+            lines.append(f"  {ip}: {count:,} requests")
+    if stats.services_targeted:
+        lines.append(f"Services targeted: {', '.join(stats.services_targeted)}")
+    return "\n".join(lines)
+
+
+def _build_loki_summary(loki_data) -> str:
+    if loki_data is None:
+        return ""
+    lines = ["\n=== LOKI LOG AGGREGATION ==="]
+    if getattr(loki_data, "error", None):
+        lines.append(f"  [error] {loki_data.error}")
+        return "\n".join(lines)
+    auth_failures = getattr(loki_data, "auth_failures", []) or []
+    error_events  = getattr(loki_data, "error_events", []) or []
+    lines.append(
+        f"Auth failure events: {len(auth_failures)}  "
+        f"Error-level events: {len(error_events)}"
+    )
+    if auth_failures:
+        lines.append("Sample auth failures (newest first):")
+        for ev in auth_failures[:5]:
+            lines.append(f"  [{ev.timestamp}] {ev.service}: {ev.message[:120]}")
+    if error_events:
+        lines.append("Sample error events:")
+        for ev in error_events[:5]:
+            lines.append(f"  [{ev.timestamp}] {ev.service}: {ev.message[:120]}")
+    return "\n".join(lines)
+
+
 def _build_correlation_summary(correlation_report, bans_delta: dict[str, int] | None = None) -> str:
     """Build a pre-computed cross-source threat correlation block for the AI prompt."""
     threats = getattr(correlation_report, "threats", []) or []
@@ -240,6 +349,20 @@ def _build_correlation_summary(correlation_report, bans_delta: dict[str, int] | 
             lines.append(f"  {t.ip}  severity={t.severity.upper()}  sources={'+'.join(t.sources)}{internal_flag}")
             for d in t.details:
                 lines.append(f"    • {d}")
+            rep = getattr(t, "reputation", None)
+            if rep is not None:
+                if rep.abuse_score is not None:
+                    cats = ", ".join(rep.abuse_categories) if rep.abuse_categories else "none"
+                    lines.append(
+                        f"    • AbuseIPDB score={rep.abuse_score}/100  "
+                        f"reports={rep.abuse_reports}  categories={cats}"
+                    )
+                if rep.crowdsec_score is not None:
+                    behaviors = ", ".join(rep.crowdsec_behaviors) if rep.crowdsec_behaviors else "none"
+                    lines.append(
+                        f"    • CrowdSec score={rep.crowdsec_score}  "
+                        f"behaviors={behaviors}"
+                    )
 
     if bans_delta:
         new_bans = {label: delta for label, delta in bans_delta.items() if delta > 0}
@@ -401,6 +524,9 @@ def build_audit_context(
     metrics_data=None,
     firewall_data=None,
     fail2ban_data=None,
+    traefik_data=None,
+    loki_data=None,
+    urlhaus_data=None,
     correlation_report=None,
     bans_delta: dict[str, int] | None = None,
 ) -> str:
@@ -411,6 +537,9 @@ def build_audit_context(
     findings += _build_metrics_summary(metrics_data)
     findings += _build_firewall_summary(firewall_data)
     findings += _build_fail2ban_summary(fail2ban_data)
+    findings += _build_traefik_summary(traefik_data)
+    findings += _build_loki_summary(loki_data)
+    findings += _build_urlhaus_summary(urlhaus_data)
     if correlation_report is not None:
         findings += _build_correlation_summary(correlation_report, bans_delta)
     return findings
@@ -424,6 +553,9 @@ def get_ai_assessment(
     metrics_data=None,
     firewall_data=None,
     fail2ban_data=None,
+    traefik_data=None,
+    loki_data=None,
+    urlhaus_data=None,
     correlation_report=None,
     bans_delta: dict[str, int] | None = None,
     historical_context: str | None = None,
@@ -436,18 +568,22 @@ def get_ai_assessment(
     findings = build_audit_context(
         traffic_data, bypass_data, rec_data, device_map,
         metrics_data, firewall_data, fail2ban_data,
+        traefik_data, loki_data, urlhaus_data,
         correlation_report, bans_delta,
     )
 
     has_metrics  = metrics_data  is not None and not getattr(metrics_data,  "errors", True)
     has_firewall = firewall_data is not None
     has_fail2ban = fail2ban_data is not None
+    has_traefik  = traefik_data is not None and getattr(traefik_data, "error", None) is None
+    has_loki     = loki_data is not None and getattr(loki_data, "error", None) is None
+    has_urlhaus  = urlhaus_data is not None and not getattr(urlhaus_data, "hits", None) is None
     has_history  = bool(historical_context)
 
     system_prompt = (
         "You are a network security and privacy analyst for a technically advanced home lab. "
-        "The operator runs OPNsense, Proxmox, Pi-hole, Suricata IDS, fail2ban, and "
-        "self-hosted services (Jellyfin, Immich, Nextcloud, Audiobookshelf, Traefik). "
+        "The operator runs OPNsense, Proxmox, Pi-hole, Suricata IDS, fail2ban, Traefik, "
+        "and self-hosted services (Jellyfin, Immich, Nextcloud, Audiobookshelf). "
         "They are privacy-focused and want specific, actionable advice — not generic tips. "
         "Reference actual IPs, domains, counts, and container names from the data. "
         "Be direct and concise. Do not pad your response.\n\n"
@@ -456,7 +592,10 @@ def get_ai_assessment(
         "query counts and should be investigated. 'KNOWN INFRASTRUCTURE' entries (jellyfin, "
         "immich, audiobookshelf, nextcloud, ansible, traefik, liquidsystem) have low query "
         "counts because they resolve hosts by IP internally — this is expected behavior and "
-        "is NOT a bypass concern. Do not flag known infrastructure as DNS bypass suspects."
+        "is NOT a bypass concern. Do not flag known infrastructure as DNS bypass suspects.\n\n"
+        "IMPORTANT — URLhaus malware hits: If any allowed domains match the URLhaus feed, "
+        "treat these as critical findings. The domain is actively resolving on the network "
+        "while being in the malware feed — this indicates possible active compromise."
     )
 
     # Build data-aware prompt sections
@@ -464,9 +603,16 @@ def get_ai_assessment(
     if has_metrics:
         data_sections.append("Prometheus system metrics for all hosts")
     if has_firewall:
-        data_sections.append("OPNsense firewall logs and Suricata IDS alerts")
+        data_sections.append("OPNsense firewall logs, Suricata IDS alerts, DHCP leases, firmware status")
     if has_fail2ban:
         data_sections.append("fail2ban status across all containers")
+    if has_traefik:
+        data_sections.append("Traefik reverse proxy access log analysis")
+    if has_loki:
+        data_sections.append("Loki aggregated container logs")
+    if has_urlhaus:
+        hits = len(getattr(urlhaus_data, "hits", []))
+        data_sections.append(f"URLhaus malware domain feed ({hits} hit(s))")
 
     # --- Executive summary instruction ---
     exec_summary_instruction = (

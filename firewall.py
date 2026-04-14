@@ -43,17 +43,32 @@ class SuricataAlert:
 
 
 @dataclass
+class DHCPLease:
+    mac: str
+    ip: str
+    hostname: str
+    interface: str
+    expires: str
+
+
+@dataclass
 class FirewallData:
     recent_blocks: list[FirewallEvent] = field(default_factory=list)
     top_blocked_ips: list[dict] = field(default_factory=list)
     suricata_alerts: list[SuricataAlert] = field(default_factory=list)
     block_count: int = 0
     alert_count: int = 0
+    # DHCP leases (OPNsense ground truth — catches static-IP devices Pi-hole misses)
+    dhcp_leases: list[DHCPLease] = field(default_factory=list)
+    # Firmware patch status
+    firmware_current: str | None = None
+    firmware_latest: str | None = None
+    firmware_update_available: bool = False
     errors: list[str] = field(default_factory=list)
 
 
 async def fetch(limit: int = 100) -> FirewallData:
-    """Fetch firewall log entries and Suricata alerts from OPNsense."""
+    """Fetch firewall log entries, Suricata alerts, DHCP leases, and firmware status."""
     data = FirewallData()
 
     if not OPNSENSE_KEY or not OPNSENSE_SECRET:
@@ -62,8 +77,13 @@ async def fetch(limit: int = 100) -> FirewallData:
 
     auth = (OPNSENSE_KEY, OPNSENSE_SECRET)
     async with httpx.AsyncClient(auth=auth, verify=False, timeout=15.0) as client:
-        await _fetch_firewall_log(client, data, limit)
-        await _fetch_suricata_alerts(client, data, limit)
+        import asyncio
+        await asyncio.gather(
+            _fetch_firewall_log(client, data, limit),
+            _fetch_suricata_alerts(client, data, limit),
+            _fetch_dhcp_leases(client, data),
+            _fetch_firmware_status(client, data),
+        )
 
     return data
 
@@ -155,3 +175,83 @@ async def _fetch_suricata_alerts(
             data.errors.append(f"Suricata alerts HTTP {exc.response.status_code}")
     except Exception as exc:
         data.errors.append(f"Suricata alerts fetch error: {exc}")
+
+
+# ---------------------------------------------------------------------------
+# DHCP leases — more reliable than Pi-hole for device discovery
+# ---------------------------------------------------------------------------
+
+async def _fetch_dhcp_leases(
+    client: httpx.AsyncClient,
+    data: FirewallData,
+) -> None:
+    try:
+        resp = await client.post(
+            f"{OPNSENSE_BASE}/api/dhcpv4/leases/searchLease",
+            json={"current": 1, "rowCount": 500, "searchPhrase": "", "sort": {}},
+        )
+        resp.raise_for_status()
+        body = resp.json()
+        rows: list[dict] = body.get("rows", body if isinstance(body, list) else [])
+
+        for row in rows:
+            mac      = row.get("mac") or row.get("hwaddr") or ""
+            ip       = row.get("address") or row.get("ip") or ""
+            hostname = row.get("hostname") or row.get("host") or ""
+            iface    = row.get("if") or row.get("interface") or ""
+            expires  = row.get("ends") or row.get("expires") or ""
+            if ip:
+                data.dhcp_leases.append(DHCPLease(
+                    mac=mac,
+                    ip=ip,
+                    hostname=hostname,
+                    interface=iface,
+                    expires=expires,
+                ))
+
+    except httpx.HTTPStatusError as exc:
+        data.errors.append(f"DHCP leases HTTP {exc.response.status_code}: {exc.request.url}")
+    except Exception as exc:
+        data.errors.append(f"DHCP leases fetch error: {exc}")
+
+
+# ---------------------------------------------------------------------------
+# Firmware status — alert if OPNsense has pending security updates
+# ---------------------------------------------------------------------------
+
+async def _fetch_firmware_status(
+    client: httpx.AsyncClient,
+    data: FirewallData,
+) -> None:
+    try:
+        resp = await client.get(f"{OPNSENSE_BASE}/api/core/firmware/status")
+        resp.raise_for_status()
+        body = resp.json()
+
+        data.firmware_current = (
+            body.get("product_version")
+            or body.get("current_version")
+            or body.get("version")
+        )
+        data.firmware_latest = (
+            body.get("product_latest")
+            or body.get("latest_version")
+            or body.get("new_version")
+        )
+
+        # OPNsense returns needs_reboot, upgrade_needs_reboot, or similar flags
+        update_flag = (
+            body.get("needs_reboot")
+            or body.get("upgrade_needs_reboot")
+            or body.get("updates_available")
+        )
+        data.firmware_update_available = bool(update_flag) or (
+            data.firmware_latest is not None
+            and data.firmware_current is not None
+            and data.firmware_latest != data.firmware_current
+        )
+
+    except httpx.HTTPStatusError as exc:
+        data.errors.append(f"Firmware status HTTP {exc.response.status_code}")
+    except Exception as exc:
+        data.errors.append(f"Firmware status fetch error: {exc}")
