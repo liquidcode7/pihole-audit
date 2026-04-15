@@ -434,6 +434,99 @@ async def api_logs_clear(req: ClearRequest) -> JSONResponse:
 _CHAT_DB_PATH = Path(os.environ.get("CHAT_DB", "data/chat_sessions.db"))
 _chat_db_lock = threading.Lock()
 
+# ---------------------------------------------------------------------------
+# User context — persistent network notes written by the AI during chat
+# ---------------------------------------------------------------------------
+
+_USER_CONTEXT_PATH = Path(os.environ.get("USER_CONTEXT_PATH", "data/user_context.json"))
+_user_context_lock = threading.Lock()
+
+
+def _load_user_context() -> dict:
+    with _user_context_lock:
+        if _USER_CONTEXT_PATH.exists():
+            try:
+                return json.loads(_USER_CONTEXT_PATH.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+    return {"notes": [], "devices": {}}
+
+
+def _save_user_context(ctx: dict) -> None:
+    with _user_context_lock:
+        _USER_CONTEXT_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _USER_CONTEXT_PATH.write_text(json.dumps(ctx, indent=2), encoding="utf-8")
+
+
+def _format_user_context(ctx: dict) -> str:
+    parts: list[str] = []
+    for note in (ctx.get("notes") or []):
+        parts.append(f"  - {note}")
+    for ip, info in (ctx.get("devices") or {}).items():
+        label = info.get("label", "?")
+        ignore = " — IGNORE IN ANALYSIS" if info.get("ignore") else ""
+        parts.append(f"  - {ip}: {label}{ignore}")
+    return "\n".join(parts)
+
+
+_CONTEXT_EXTRACT_PROMPT = """\
+Analyze this chat exchange. Did the USER (not the AI) state any concrete facts \
+about their home network that should be remembered for future sessions?
+
+Save only explicit user statements such as:
+- Device identifications: "192.168.1.X is my phone"
+- Ignore rules: "ignore GrapheneOS queries from my phone"
+- Network facts: "my NAS is at X.X.X.X"
+- Clarifications: "that domain is from my work VPN, not malicious"
+
+Do NOT save: questions, one-time requests, agreement with AI, or anything the AI said.
+
+User message: {user_msg}
+AI response (first 400 chars): {ai_summary}
+
+Return ONLY valid JSON, no explanation:
+{{"notes": ["concrete fact"], "devices": {{"1.2.3.4": {{"label": "My Phone (GrapheneOS)", "ignore": true}}}}}}
+Return {{"notes": [], "devices": {{}}}} if the user stated nothing concrete worth saving.\
+"""
+
+
+async def _extract_and_save_context(user_msg: str, ai_msg: str) -> None:
+    """Background task: extract any network facts from the exchange and persist them."""
+    import re
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return
+    try:
+        prompt = _CONTEXT_EXTRACT_PROMPT.format(
+            user_msg=user_msg[:500],
+            ai_summary=ai_msg[:400].replace("\n", " "),
+        )
+        client = anthropic.Anthropic(api_key=api_key)
+        resp = await asyncio.to_thread(
+            lambda: client.messages.create(
+                model=MODEL,
+                max_tokens=256,
+                messages=[{"role": "user", "content": prompt}],
+            )
+        )
+        raw = resp.content[0].text.strip()
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
+        data = json.loads(raw)
+        notes   = [n for n in (data.get("notes") or []) if isinstance(n, str) and n.strip()]
+        devices = {
+            ip: info for ip, info in (data.get("devices") or {}).items()
+            if isinstance(ip, str) and isinstance(info, dict)
+        }
+        if notes or devices:
+            ctx = _load_user_context()
+            existing = set(ctx.get("notes") or [])
+            ctx["notes"] = list(existing) + [n for n in notes if n not in existing]
+            ctx.setdefault("devices", {}).update(devices)
+            _save_user_context(ctx)
+    except Exception:
+        pass  # Best-effort — never crash the chat over this
+
 
 def _chat_db() -> sqlite3.Connection:
     _CHAT_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -503,6 +596,7 @@ The user's setup:
   - Proxmox hypervisor
   - Various self-hosted services on a home LAN
 
+{user_context_block}\
 Conversation rules:
 1. Always reference actual IPs, domains, and counts from the audit data. \
 Never give generic advice when real data is available.
@@ -578,7 +672,12 @@ def _build_chat_system(report: dict) -> str:
     if assessment:
         context += f"\n\n--- INITIAL ASSESSMENT ---\n{assessment}"
 
-    return _CHAT_SYSTEM_PROMPT.format(audit_context=context)
+    user_ctx = _format_user_context(_load_user_context())
+    user_context_block = (
+        f"--- USER MEMORY (facts provided in past conversations) ---\n{user_ctx}\n\n"
+        if user_ctx else ""
+    )
+    return _CHAT_SYSTEM_PROMPT.format(audit_context=context, user_context_block=user_context_block)
 
 
 class ChatRequest(BaseModel):
@@ -656,6 +755,8 @@ async def api_chat(req: ChatRequest) -> StreamingResponse:
         response_text = "".join(full_text)
         history.append({"role": "assistant", "content": response_text})
         _save_session(req.session_id, history)
+        # Background: extract any network facts the user stated and persist them
+        asyncio.create_task(_extract_and_save_context(req.message, response_text))
         yield f"data: {json.dumps({'done': True})}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
@@ -665,6 +766,37 @@ async def api_chat(req: ChatRequest) -> StreamingResponse:
 async def api_chat_reset(req: ChatResetRequest) -> JSONResponse:
     """Clear conversation history for a session."""
     _delete_session(req.session_id)
+    return JSONResponse({"status": "cleared"})
+
+
+# ---------------------------------------------------------------------------
+# User context endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/api/context")
+async def api_context_get() -> JSONResponse:
+    return JSONResponse(_load_user_context())
+
+
+class ContextNoteRequest(BaseModel):
+    note: str
+
+
+@app.post("/api/context/note")
+async def api_context_add_note(req: ContextNoteRequest) -> JSONResponse:
+    note = req.note.strip()
+    if not note:
+        raise HTTPException(status_code=400, detail="Note cannot be empty")
+    ctx = _load_user_context()
+    if note not in ctx.get("notes", []):
+        ctx.setdefault("notes", []).append(note)
+        _save_user_context(ctx)
+    return JSONResponse(ctx)
+
+
+@app.delete("/api/context")
+async def api_context_clear() -> JSONResponse:
+    _save_user_context({"notes": [], "devices": {}})
     return JSONResponse({"status": "cleared"})
 
 

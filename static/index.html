@@ -131,6 +131,9 @@
 
     /* ── Tab Bar ── */
     .tab-bar {
+      position: sticky;
+      top: 56px;
+      z-index: 99;
       display: flex;
       gap: 2px;
       padding: 0 20px;
@@ -971,7 +974,18 @@
     <div id="tab-chat" class="tab-pane">
       <div class="chat-toolbar">
         <span id="chat-context-label">Context: latest report</span>
-        <button class="btn btn-secondary" style="font-size:0.75rem;padding:4px 10px" onclick="resetChat()">&#x21BA; New conversation</button>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn btn-secondary" id="memory-btn" style="font-size:0.75rem;padding:4px 10px" onclick="toggleMemory()">&#x1F9E0; Memory <span id="memory-count"></span></button>
+          <button class="btn btn-secondary" style="font-size:0.75rem;padding:4px 10px" onclick="resetChat()">&#x21BA; New conversation</button>
+        </div>
+      </div>
+      <!-- Memory panel -->
+      <div id="memory-panel" style="display:none;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin:0 0 8px;font-size:0.82rem">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <strong style="color:var(--text)">Saved network context</strong>
+          <button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 8px;color:var(--danger)" onclick="clearMemory()">Clear all</button>
+        </div>
+        <div id="memory-content" style="color:var(--muted)">Loading…</div>
       </div>
       <div class="chat-messages" id="chat-messages">
         <div class="chat-empty" id="chat-empty">
@@ -2469,8 +2483,70 @@ async function sendChat() {
     chatStreaming = false;
     document.getElementById('chat-send-btn').disabled = false;
     document.getElementById('chat-input').focus();
+    refreshMemoryCount();
   }
 }
+
+// ── Network Memory ──────────────────────────────────────────────────────────
+let memoryOpen = false;
+
+async function refreshMemoryCount() {
+  try {
+    const resp = await fetch('/api/context');
+    if (!resp.ok) return;
+    const ctx = await resp.json();
+    const total = (ctx.notes || []).length + Object.keys(ctx.devices || {}).length;
+    const el = document.getElementById('memory-count');
+    if (el) el.textContent = total > 0 ? `(${total})` : '';
+  } catch (_) {}
+}
+
+async function toggleMemory() {
+  const panel = document.getElementById('memory-panel');
+  memoryOpen = !memoryOpen;
+  panel.style.display = memoryOpen ? 'block' : 'none';
+  if (memoryOpen) await renderMemory();
+}
+
+async function renderMemory() {
+  const el = document.getElementById('memory-content');
+  try {
+    const resp = await fetch('/api/context');
+    const ctx = await resp.json();
+    const notes = ctx.notes || [];
+    const devices = ctx.devices || {};
+    const total = notes.length + Object.keys(devices).length;
+    if (total === 0) {
+      el.innerHTML = '<em>No saved context yet. Tell Claude facts about your network and they\'ll be remembered here.</em>';
+      return;
+    }
+    let html = '';
+    if (notes.length) {
+      html += '<div style="margin-bottom:8px"><strong style="color:var(--muted);font-size:0.72rem;text-transform:uppercase;letter-spacing:0.05em">Notes</strong></div>';
+      html += notes.map(n => `<div style="padding:3px 0;border-bottom:1px solid var(--border)">• ${esc(n)}</div>`).join('');
+    }
+    if (Object.keys(devices).length) {
+      html += '<div style="margin:10px 0 8px"><strong style="color:var(--muted);font-size:0.72rem;text-transform:uppercase;letter-spacing:0.05em">Devices</strong></div>';
+      html += Object.entries(devices).map(([ip, info]) => {
+        const ignore = info.ignore ? ' <span style="color:var(--warning);font-size:0.72rem">[ignored]</span>' : '';
+        return `<div style="padding:3px 0;border-bottom:1px solid var(--border)"><code>${esc(ip)}</code> — ${esc(info.label || '?')}${ignore}</div>`;
+      }).join('');
+    }
+    el.innerHTML = html;
+  } catch (_) {
+    el.innerHTML = '<em style="color:var(--danger)">Failed to load context.</em>';
+  }
+}
+
+async function clearMemory() {
+  if (!confirm('Clear all saved network context? This cannot be undone.')) return;
+  await fetch('/api/context', { method: 'DELETE' });
+  document.getElementById('memory-count').textContent = '';
+  await renderMemory();
+}
+
+// Load memory count on page load and after each chat response
+document.addEventListener('DOMContentLoaded', refreshMemoryCount);
 
 async function resetChat() {
   if (chatStreaming) return;

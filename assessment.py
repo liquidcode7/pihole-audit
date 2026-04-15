@@ -516,6 +516,28 @@ def load_historical_context(reports_dir: str | Path, n: int = 5) -> str | None:
 # Public API
 # ---------------------------------------------------------------------------
 
+def _build_user_context_block() -> str:
+    """Inject user-provided network context from the persistent memory file."""
+    import os as _os
+    ctx_path = Path(_os.environ.get("USER_CONTEXT_PATH", "data/user_context.json"))
+    if not ctx_path.exists():
+        return ""
+    try:
+        ctx = json.loads(ctx_path.read_text(encoding="utf-8"))
+    except Exception:
+        return ""
+    lines = []
+    for note in (ctx.get("notes") or []):
+        lines.append(f"  - {note}")
+    for ip, info in (ctx.get("devices") or {}).items():
+        label = info.get("label", "?")
+        ignore = " — IGNORE IN ANALYSIS" if info.get("ignore") else ""
+        lines.append(f"  - {ip}: {label}{ignore}")
+    if not lines:
+        return ""
+    return "\n=== USER-PROVIDED NETWORK CONTEXT ===\n" + "\n".join(lines)
+
+
 def build_audit_context(
     traffic_data: TrafficData,
     bypass_data: BypassData,
@@ -542,6 +564,7 @@ def build_audit_context(
     findings += _build_urlhaus_summary(urlhaus_data)
     if correlation_report is not None:
         findings += _build_correlation_summary(correlation_report, bans_delta)
+    findings += _build_user_context_block()
     return findings
 
 
