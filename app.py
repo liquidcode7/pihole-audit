@@ -192,7 +192,7 @@ async def api_report(report_id: str) -> JSONResponse:
 
 @app.get("/api/reports/{report_id}/export")
 async def api_report_export(report_id: str) -> HTMLResponse:
-    """Render the report as a self-contained HTML file, then delete the stored JSON."""
+    """Render the report as a self-contained HTML archive, then delete the stored JSON."""
     if not all(c.isalnum() or c in "-_" for c in report_id):
         raise HTTPException(status_code=400, detail="Invalid report ID")
     path = DATA_DIR / f"{report_id}.json"
@@ -204,54 +204,188 @@ async def api_report_export(report_id: str) -> HTMLResponse:
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
-    # Reconstruct typed objects from stored JSON
-    from bypass import BypassData
-    from device_identifier import DeviceInfo, NetworkRiskSummary
-    from recommender import RecommenderData
-    from report import render_html
-    from traffic import TrafficData
-
-    try:
-        traffic     = TrafficData(**data["traffic_data"])    if data.get("traffic_data") else None
-        bypass      = BypassData(**data["bypass_data"])      if data.get("bypass_data")  else None
-        rec         = RecommenderData(**data["rec_data"])     if data.get("rec_data")     else None
-        client_names = data.get("client_names") or {}
-        raw_devices  = data.get("device_map") or {}
-        device_map   = {ip: DeviceInfo(**info) for ip, info in raw_devices.items()}
-        raw_risk     = data.get("risk_summary")
-        risk_summary = NetworkRiskSummary(**raw_risk) if raw_risk else None
-        assessment   = data.get("assessment_text")
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to parse report data: {exc}")
-
-    # Render to an in-memory temp file, read it, then clean up
-    import tempfile
-    with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as tmp:
-        tmp_path = Path(tmp.name)
-
-    try:
-        render_html(
-            traffic_data=traffic,
-            bypass_data=bypass,
-            rec_data=rec,
-            client_names=client_names,
-            output_path=tmp_path,
-            assessment_text=assessment,
-            device_map=device_map,
-            risk_summary=risk_summary,
-        )
-        html_bytes = tmp_path.read_bytes()
-    finally:
-        tmp_path.unlink(missing_ok=True)
+    html = _render_export_html(data)
 
     # Delete the stored JSON report
     path.unlink(missing_ok=True)
 
     filename = f"liquidsystem-{report_id}.html"
     return HTMLResponse(
-        content=html_bytes,
+        content=html,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+def _render_export_html(data: dict) -> str:
+    """Generate a self-contained HTML archive directly from the report JSON dict."""
+    import html as _html
+
+    def esc(s: object) -> str:
+        return _html.escape(str(s)) if s is not None else ""
+
+    report_id  = esc(data.get("id", "unknown"))
+    created_at = esc(data.get("created_at", "")[:19].replace("T", " "))
+    assessment = data.get("assessment_text") or ""
+
+    # Traffic summary
+    s = (data.get("traffic_data") or {}).get("summary") or {}
+    total    = s.get("total", 0)
+    blocked  = s.get("blocked", 0)
+    pct      = s.get("percent_blocked", 0)
+    clients  = s.get("active_clients", 0)
+    domains  = s.get("unique_domains", 0)
+    gravity  = s.get("gravity_domains", 0)
+
+    # Top domains
+    td = data.get("traffic_data") or {}
+    top_allowed_rows = "".join(
+        f"<tr><td>{i+1}</td><td>{esc(d.get('domain',''))}</td>"
+        f"<td style='text-align:right'>{d.get('count',0):,}</td></tr>"
+        for i, d in enumerate((td.get("top_allowed") or [])[:15])
+    )
+    top_blocked_rows = "".join(
+        f"<tr><td>{i+1}</td><td>{esc(d.get('domain',''))}</td>"
+        f"<td style='text-align:right'>{d.get('count',0):,}</td></tr>"
+        for i, d in enumerate((td.get("top_blocked") or [])[:15])
+    )
+
+    # Bypass findings
+    bypass_findings = (data.get("bypass_data") or {}).get("findings") or []
+    bypass_rows = "".join(
+        f"<tr><td><code>{esc(f.get('client_ip',''))}</code></td>"
+        f"<td>{esc(f.get('method',''))}</td><td>{esc(f.get('detail',''))}</td>"
+        f"<td style='text-align:right'>{f.get('count',0)}</td></tr>"
+        for f in bypass_findings
+    ) or "<tr><td colspan='4' style='color:var(--muted)'>No bypass indicators detected.</td></tr>"
+
+    # Correlations
+    threats = (data.get("correlations") or {}).get("threats") or []
+    threat_rows = ""
+    for t in threats:
+        sev = t.get("severity", "info")
+        sev_color = {"critical": "var(--red)", "warning": "var(--yellow)"}.get(sev, "var(--muted)")
+        sources = "+".join(t.get("sources") or [])
+        details = "; ".join(t.get("details") or [])
+        rep = t.get("reputation") or {}
+        abuse = f" | AbuseIPDB: {rep['abuse_score']}/100" if rep.get("abuse_score") is not None else ""
+        threat_rows += (
+            f"<tr><td style='color:{sev_color}'>{esc(sev.upper())}</td>"
+            f"<td><code>{esc(t.get('ip',''))}</code></td>"
+            f"<td>{esc(sources)}</td>"
+            f"<td style='font-size:0.85em;color:var(--muted)'>{esc(details)}{esc(abuse)}</td></tr>"
+        )
+    if not threat_rows:
+        threat_rows = "<tr><td colspan='4' style='color:var(--muted)'>No cross-source threats detected.</td></tr>"
+
+    # Assessment HTML (preserve newlines, basic markdown → html)
+    import re
+    def md_to_html(text: str) -> str:
+        text = _html.escape(text)
+        text = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', text)
+        text = re.sub(r'\*(.+?)\*', r'<em>\1</em>', text)
+        text = re.sub(r'`(.+?)`', r'<code>\1</code>', text)
+        text = re.sub(r'^#{3}\s+(.+)$', r'<h3>\1</h3>', text, flags=re.MULTILINE)
+        text = re.sub(r'^#{2}\s+(.+)$', r'<h2>\1</h2>', text, flags=re.MULTILINE)
+        text = re.sub(r'^#{1}\s+(.+)$', r'<h1>\1</h1>', text, flags=re.MULTILINE)
+        text = re.sub(r'^[-*]\s+(.+)$', r'<li>\1</li>', text, flags=re.MULTILINE)
+        text = re.sub(r'(<li>.*</li>\n?)+', r'<ul>\g<0></ul>', text)
+        text = re.sub(r'\n\n+', '</p><p>', text)
+        return f"<p>{text}</p>"
+
+    assessment_html = md_to_html(assessment) if assessment else "<p><em>No assessment available.</em></p>"
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LiquidSystem Report — {report_id}</title>
+<style>
+  :root {{
+    --bg: #0f1117; --surface: #1a1d27; --surface2: #20232e;
+    --border: #2a2d3a; --text: #e2e8f0; --muted: #94a3b8;
+    --accent: #38bdf8; --green: #4ade80; --yellow: #facc15;
+    --red: #f87171;
+  }}
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.7;
+    padding: 32px 24px; max-width: 1100px; margin: 0 auto; }}
+  h1 {{ font-size: 1.5rem; color: var(--accent); margin-bottom: 4px; }}
+  h2 {{ font-size: 1rem; font-weight: 600; color: var(--text); margin: 24px 0 10px; }}
+  h3 {{ font-size: 0.9rem; font-weight: 600; color: var(--muted); margin: 16px 0 6px; }}
+  .meta {{ color: var(--muted); font-size: 0.85rem; margin-bottom: 32px; }}
+  .stat-grid {{ display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 28px; }}
+  .stat {{ background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 14px 20px; min-width: 130px; }}
+  .stat-label {{ font-size: 0.72rem; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 0.06em; margin-bottom: 4px; }}
+  .stat-value {{ font-size: 1.5rem; font-weight: 700; }}
+  .section {{ background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 20px; margin-bottom: 20px; }}
+  table {{ width: 100%; border-collapse: collapse; font-size: 0.85rem; }}
+  th {{ text-align: left; color: var(--muted); font-size: 0.72rem;
+    text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border);
+    padding: 6px 10px; }}
+  td {{ padding: 7px 10px; border-bottom: 1px solid var(--border); }}
+  tr:last-child td {{ border-bottom: none; }}
+  code {{ font-family: "SF Mono","Fira Code",monospace; font-size: 0.82em;
+    background: var(--surface2); padding: 1px 4px; border-radius: 3px; }}
+  .table-pair {{ display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }}
+  .assessment {{ line-height: 1.8; }}
+  .assessment p {{ margin-bottom: 12px; }}
+  .assessment h1, .assessment h2, .assessment h3 {{ margin-top: 20px; margin-bottom: 8px; }}
+  .assessment ul {{ margin: 8px 0 8px 20px; }}
+  .assessment li {{ margin-bottom: 4px; }}
+  .assessment code {{ display: inline-block; }}
+  @media (max-width: 700px) {{ .table-pair {{ grid-template-columns: 1fr; }} }}
+</style>
+</head>
+<body>
+<h1>LiquidSystem Network Intelligence Report</h1>
+<div class="meta">Report ID: {report_id} &nbsp;|&nbsp; Generated: {created_at}</div>
+
+<div class="stat-grid">
+  <div class="stat"><div class="stat-label">Total Queries</div><div class="stat-value">{total:,}</div></div>
+  <div class="stat"><div class="stat-label">Blocked</div><div class="stat-value">{blocked:,}</div></div>
+  <div class="stat"><div class="stat-label">Block Rate</div><div class="stat-value">{pct:.1f}%</div></div>
+  <div class="stat"><div class="stat-label">Active Clients</div><div class="stat-value">{clients}</div></div>
+  <div class="stat"><div class="stat-label">Unique Domains</div><div class="stat-value">{domains:,}</div></div>
+  <div class="stat"><div class="stat-label">Gravity List</div><div class="stat-value">{gravity:,}</div></div>
+</div>
+
+<div class="section">
+  <h2>AI Security Assessment</h2>
+  <div class="assessment">{assessment_html}</div>
+</div>
+
+<div class="table-pair">
+  <div class="section">
+    <h2>Top Allowed Domains</h2>
+    <table><thead><tr><th>#</th><th>Domain</th><th>Queries</th></tr></thead>
+    <tbody>{top_allowed_rows}</tbody></table>
+  </div>
+  <div class="section">
+    <h2>Top Blocked Domains</h2>
+    <table><thead><tr><th>#</th><th>Domain</th><th>Queries</th></tr></thead>
+    <tbody>{top_blocked_rows}</tbody></table>
+  </div>
+</div>
+
+<div class="section">
+  <h2>DNS Bypass Findings</h2>
+  <table><thead><tr><th>Client IP</th><th>Method</th><th>Detail</th><th>Count</th></tr></thead>
+  <tbody>{bypass_rows}</tbody></table>
+</div>
+
+<div class="section">
+  <h2>Cross-Source Threat Correlations</h2>
+  <table><thead><tr><th>Severity</th><th>IP</th><th>Sources</th><th>Details</th></tr></thead>
+  <tbody>{threat_rows}</tbody></table>
+</div>
+
+</body>
+</html>"""
 
 
 # ---------------------------------------------------------------------------
