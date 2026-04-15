@@ -665,6 +665,7 @@
     #tab-chat.active { display: flex; flex-direction: column; height: calc(100vh - 200px); min-height: 500px; }
     .chat-messages {
       flex: 1;
+      min-height: 0;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
@@ -2299,9 +2300,13 @@ async function blockDomain(btn, domain) {
 function scrollToBottom() {
   const container = document.getElementById('chat-messages');
   if (!container) return;
-  requestAnimationFrame(() => {
-    container.scrollTop = container.scrollHeight;
-  });
+  // Only auto-scroll if user is already near the bottom (within 120px)
+  const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 120;
+  if (nearBottom) {
+    requestAnimationFrame(() => {
+      container.scrollTop = container.scrollHeight;
+    });
+  }
 }
 
 const CHAT_SESSION = 'web-' + Math.random().toString(36).slice(2, 10);
