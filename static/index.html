@@ -673,7 +673,10 @@
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+      scroll-behavior: smooth;
+      overflow-anchor: none;
     }
+    #chat-anchor { height: 1px; flex-shrink: 0; }
     .chat-msg {
       display: flex;
       gap: 12px;
@@ -975,6 +978,7 @@
             <span class="chat-suggestion" onclick="sendSuggestion(this)">What's my highest-risk device?</span>
           </div>
         </div>
+        <div id="chat-anchor"></div>
       </div>
       <div class="chat-input-row">
         <textarea id="chat-input" rows="1" placeholder="Ask a follow-up question about your network…" onkeydown="chatKeydown(event)"></textarea>
@@ -2292,6 +2296,13 @@ async function blockDomain(btn, domain) {
 
 // ── Chat ───────────────────────────────────────────────────────────────────
 
+function scrollToBottom() {
+  requestAnimationFrame(() => {
+    const anchor = document.getElementById('chat-anchor');
+    if (anchor) anchor.scrollIntoView({ block: 'end' });
+  });
+}
+
 const CHAT_SESSION = 'web-' + Math.random().toString(36).slice(2, 10);
 let chatReportId   = null;   // set when a report is loaded
 let chatStreaming   = false;
@@ -2333,7 +2344,7 @@ function appendMessage(role, content, id) {
     <div class="chat-avatar">${avatarText}</div>
     <div class="chat-bubble">${bubbleHtml}</div>`;
   container.appendChild(div);
-  container.scrollTop = container.scrollHeight;
+  scrollToBottom();
   return div;
 }
 
@@ -2355,7 +2366,7 @@ function showTyping() {
       </div>
     </div>`;
   container.appendChild(div);
-  container.scrollTop = container.scrollHeight;
+  scrollToBottom();
 }
 
 function removeTyping() {
@@ -2435,7 +2446,7 @@ async function sendChat() {
           if (payload.token) {
             rawText += payload.token;
             bodyDiv.innerHTML = renderMarkdown(rawText);
-            container.scrollTop = container.scrollHeight;
+            scrollToBottom();
           }
         } catch (_) {}
       }
